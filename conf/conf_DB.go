@@ -75,7 +75,7 @@ func (db *DB) DSN() gorm.Dialector {
 	case DBSqliteMode:
 		return sqlite.Open(db.DBName)
 	default:
-		logrus.Warnf("未配置mysql连接")
+		logrus.Panicf("未配置数据库连接")
 		return nil
 	}
 }
