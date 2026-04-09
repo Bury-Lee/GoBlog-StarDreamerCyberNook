@@ -42,13 +42,3 @@ type MessageModel struct {
 	LinkHref           string      `json:"linkHref"`           // 链接href
 	IsRead             bool        `json:"isRead"`             // 是否已读
 }
-
-type UserMessageConfModel struct {
-	UserID             uint      `gorm:"primaryKey;unique" json:"userID"`    // 用户id
-	UserModel          UserModel `gorm:"foreignKey:UserID" json:"userModel"` // 用户信息
-	OpenCommentMessage bool      `json:"openCommentMessage"`                 // 是否开启评论通知
-	OpenReplyMessage   bool      `json:"openReplyMessage"`                   // 是否开启回复通知
-	OpenDiggMessage    bool      `json:"openDiggMessage"`                    // 是否开启点赞	通知
-	OpenCollectMessage bool      `json:"openCollectMessage"`                 // 是否开启收藏通知
-	OpenPrivateMessage bool      `json:"openPrivateMessage"`                 // 是否开启私信通知
-}

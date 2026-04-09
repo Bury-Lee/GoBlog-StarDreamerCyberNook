@@ -23,7 +23,7 @@ func ConvertSliceOrderSql(orderList []uint) string {
 			result += fmt.Sprintf("id = %d desc", v)
 			break
 		}
-		result += fmt.Sprintf("id = %d dasc,", v)
+		result += fmt.Sprintf("id = %d desc,", v)
 	}
 	return result
 }

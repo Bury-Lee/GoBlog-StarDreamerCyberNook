@@ -74,12 +74,6 @@ type UserConfModel struct {
 	HomeStyleID        uint       `json:"homeStyleID"`                     // 主页样式ID
 }
 
-type UserCloudModel struct { //目前占位使用,暂时不开启,记得在flag_db注册表
-	UserID    uint      `gorm:"primaryKey;unique" json:"userID"` // 用户ID，唯一索引
-	UserModel UserModel `gorm:"foreignKey:UserID" json:"-"`      // 关联的用户信息
-	OpenCloud bool      `json:"openCloud"`                       // 开启云盘
-}
-
 // ExistDays 计算用户存在天数
 // 返回从用户创建时间到当前时间的天数
 // 参数: 无
@@ -87,4 +81,14 @@ type UserCloudModel struct { //目前占位使用,暂时不开启,记得在flag_
 func (this *UserModel) ExistDays() int {
 	duration := time.Since(this.CreatedAt)
 	return int(duration.Hours()/24 + 1)
+}
+
+type UserMessageConfModel struct {
+	UserID             uint      `gorm:"primaryKey;unique" json:"userID"`    // 用户id
+	UserModel          UserModel `gorm:"foreignKey:UserID" json:"userModel"` // 用户信息
+	OpenCommentMessage bool      `json:"openCommentMessage"`                 // 是否开启评论通知
+	OpenReplyMessage   bool      `json:"openReplyMessage"`                   // 是否开启回复通知
+	OpenDiggMessage    bool      `json:"openDiggMessage"`                    // 是否开启点赞	通知
+	OpenCollectMessage bool      `json:"openCollectMessage"`                 // 是否开启收藏通知
+	OpenPrivateMessage bool      `json:"openPrivateMessage"`                 // 是否开启私信通知
 }

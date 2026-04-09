@@ -21,7 +21,7 @@ import (
 type ArticleSearchRequest struct {
 	common.PageInfo
 	Tag  string `form:"tag"`  // 按标签筛选
-	Type int8   `form:"type"` // 排序类型: 0 猜你喜欢  1 最新发布  2最多回复 3最多点赞 4最多收藏
+	Type int8   `form:"type"` // 排序类型: 0 最新发布 1 猜你喜欢    2最多回复 3最多点赞 4最多收藏
 }
 
 // ArticleBaseInfo 搜索结果的基础信息结构体
@@ -62,8 +62,8 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 
 	// 2. 根据请求的Type确定Elasticsearch排序字段
 	var sortMap = map[int8]string{
-		0: "_score",        // 猜你喜欢：按相关性评分排序
-		1: "created_at",    // 最新发布：按创建时间排序
+		0: "created_at",    // 最新发布：按创建时间排序
+		1: "_score",        // 猜你喜欢：按相关性评分排序
 		2: "comment_count", // 最多回复：按评论数排序
 		3: "digg_count",    // 最多点赞：按点赞数排序
 		4: "collect_count", // 最多收藏：按收藏数排序
@@ -91,7 +91,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 		)
 	}
 
-	// 只查询已发布（status=3）的文章（Must关系）
+	// 只查询已发布的文章（Must关系）
 	query.Must(elastic.NewTermQuery("status", int(models.StatusPublished)))
 
 	// 处理管理员置顶逻辑
@@ -109,35 +109,35 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 		var topArticleIDListAny []interface{}
 		for _, u := range topArticleIDList {
 			topArticleIDListAny = append(topArticleIDListAny, u)
-			articleTopMap[u] = true                  // 标记为置顶
-			articleIDList = append(articleIDList, u) // 加入ID列表
+			articleTopMap[u] = true // 标记为置顶
 		}
-		// 使用T&ermQuery + Boost(10) 将置顶文章的评分提高，使其排在前面
+		// 只给命中的置顶文章加权，不绕过搜索条件
 		query.Should(elastic.NewTermsQuery("id", topArticleIDListAny...).Boost(10))
 	}
 
-	// 如果是"猜你喜欢"（Type=0），则加入用户兴趣标签查询
-	if cr.Type == 0 {
+	// 如果是"猜你喜欢"（Type=1），则加入用户兴趣标签查询
+	if cr.Type == 1 {
 		// 尝试从JWT Token中解析用户信息
 		claims, err := jwts.ParseTokenByGin(c)
 		if err == nil && claims != nil {
 			// 用户已登录
-			var userConf models.UserConfModel
-			// 查询用户的配置信息
-			err = global.DB.Take(&userConf, "user_id = ?", claims.UserID).Error
+			var user models.UserModel
+			// 读取用户兴趣标签
+			err = global.DB.Select("id", "like_tags").Take(&user, claims.UserID).Error
 			if err != nil {
-				response.FailWithMsg("用户配置不存在", c)
+				response.FailWithMsg("用户信息不存在", c)
 				return
 			}
 			// 如果用户配置中有感兴趣的文章标签
-			if len(userConf.UserModel.LikeTags) > 0 {
+			if len(user.LikeTags) > 0 {
 				tagQuery := elastic.NewBoolQuery()
 				var tagAnyList []interface{}
-				for _, tag := range userConf.UserModel.LikeTags {
+				for _, tag := range user.LikeTags {
 					tagAnyList = append(tagAnyList, tag)
 				}
-				// 在查询中添加对这些标签的匹配（Should关系），提高相关性
-				tagQuery.Should(elastic.NewTermsQuery("tag_list", tagAnyList...))
+				// 兴趣标签至少命中一个
+				tagQuery.Should(elastic.NewTermsQuery("tag_list", tagAnyList...)).
+					MinimumNumberShouldMatch(1)
 				query.Must(tagQuery)
 			}
 		}
@@ -169,6 +169,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 	// 解析Elasticsearch返回的命中结果
 	count := result.Hits.TotalHits.Value              // 获取总命中数
 	var searchArticleMap = map[uint]ArticleBaseInfo{} // 用于存储ES返回的精简文章信息（含高亮）
+	var articleIDSet = map[uint]struct{}{}            // 用于去重文章ID
 
 	for _, hit := range result.Hits.Hits {
 		var art ArticleBaseInfo
@@ -190,17 +191,32 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 			art.Abstract = hit.Highlight["abstract"][0]
 		}
 
-		searchArticleMap[art.ID] = art                // 存入映射表
-		articleIDList = append(articleIDList, art.ID) // 将ID加入列表（去重逻辑在此处未体现，但不影响最终结果）
+		searchArticleMap[art.ID] = art // 存入映射表
+		if _, ok := articleIDSet[art.ID]; ok {
+			continue
+		}
+		articleIDSet[art.ID] = struct{}{}
+		articleIDList = append(articleIDList, art.ID)
+	}
+
+	// 没有命中时直接返回，避免无意义的数据库查询
+	if len(articleIDList) == 0 {
+		response.OkWithList([]ArticleSearchListResponse{}, int(count), c)
+		return
 	}
 
 	// 根据Elasticsearch返回的文章ID列表，从数据库查询完整的文章对象（包含关联的分类和用户信息）
 	where := global.DB.Where("id in ?", articleIDList)
-	_list, _, _ := common.ListQuery[models.ArticleModel](models.ArticleModel{}, common.Options{
+	_list, _, err := common.ListQuery[models.ArticleModel](models.ArticleModel{}, common.Options{
 		Where:        where,
 		Preloads:     []string{"CategoryModel", "UserModel"},  // 预加载分类和用户信息
 		DefaultOrder: sql.ConvertSliceOrderSql(articleIDList), // 按照articleIDList的顺序进行排序
 	})
+	if err != nil {
+		logrus.Errorf("查询文章详情失败 %s", err)
+		response.FailWithMsg("查询失败", c)
+		return
+	}
 
 	// 将数据库查询的完整信息与ES返回的高亮信息合并
 	var list = make([]ArticleSearchListResponse, 0)
@@ -216,8 +232,10 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 			item.CategoryTitle = &model.CategoryModel.Title
 		}
 		// 使用ES返回的高亮标题和摘要覆盖数据库中的原始内容
-		item.Title = searchArticleMap[model.ID].Title
-		item.Abstract = searchArticleMap[model.ID].Abstract
+		if art, ok := searchArticleMap[model.ID]; ok {
+			item.Title = art.Title
+			item.Abstract = art.Abstract
+		}
 		list = append(list, item)
 	}
 
