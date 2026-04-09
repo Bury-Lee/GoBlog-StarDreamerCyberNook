@@ -31,29 +31,29 @@ const (
 func (c Code) String() string {
 	switch c {
 	case SuccessCode:
-		return "SuccessCode"
+		return "操作成功"
 	case FailCode:
-		return "FailCode"
+		return "操作失败"
 	case FailValid:
-		return "FailValid"
+		return "验证失败"
 	case FailServiceCode:
-		return "FailServiceCode"
+		return "服务端错误"
 	case NotFound:
-		return "NotFound"
+		return "资源未找到"
 	case Forbidden:
-		return "Forbidden"
+		return "禁止访问"
 	case ServiceUnavailable:
-		return "ServiceUnavailable"
+		return "服务暂时不可用"
 
 	case 400: // BadRequest, InvalidData
-		return "BadRequest | InvalidData"
+		return "请求参数错误"
 	case 401: // Unauthorized, NotLoggedIn, AuthenticationFailed
-		return "Unauthorized | NotLoggedIn | AuthenticationFailed"
+		return "未授权访问"
 	case 500: // ServerError, DatabaseError, UnknownError
-		return "ServerError | DatabaseError | UnknownError"
+		return "服务器内部错误"
 
 	default:
-		return "UnknownCode"
+		return "未知错误"
 	}
 }
 
@@ -64,13 +64,13 @@ type Response struct {
 }
 
 func (this Response) Json(c *gin.Context) {
+	if global.Config.System.RunMode == "debug" {
+		logrus.Debugf("\n%s的返回响应:%d, %+v, msg: %s", this.Code.String(), this.Code, this.Data, this.Msg)
+	}
 	c.JSON(int(this.Code), this)
 }
 
 func Ok(data any, msg string, c *gin.Context) { //返回数据与消息
-	if global.Config.System.RunMode == "debug" {
-		logrus.Debug(SuccessCode, data, msg)
-	}
 	Response{SuccessCode, data, msg}.Json(c)
 }
 
@@ -82,13 +82,10 @@ func OkWithMsg(msg string, c *gin.Context) { //返回消息
 }
 
 func OkWithList(list any, count int, c *gin.Context) {
-	Response{SuccessCode, map[string]any{"list": list, "cout": count}, "成功"}.Json(c)
+	Response{SuccessCode, map[string]any{"list": list, "count": count}, "成功"}.Json(c)
 }
 
 func Fail(code Code, msg string, data any, c *gin.Context) {
-	if global.Config.System.RunMode == "debug" {
-		logrus.Debug(code, data, msg)
-	}
 	Response{Code: code, Data: data, Msg: msg}.Json(c)
 }
 

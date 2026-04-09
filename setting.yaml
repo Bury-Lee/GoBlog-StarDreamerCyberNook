@@ -9,6 +9,7 @@ system:
 log:
   app:     # 应用名称
   dir:                     # 日志存储目录
+  log_level: debug         # 记录的最低日志级别
   # TODO: 后续添加定时清理日志功能，精确到天，默认保留7天
 
 # AI相关配置
