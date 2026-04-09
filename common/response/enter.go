@@ -69,7 +69,7 @@ func (this Response) Json(c *gin.Context) {
 
 func Ok(data any, msg string, c *gin.Context) { //返回数据与消息
 	if global.Config.System.RunMode == "debug" {
-		logrus.Info(SuccessCode, data, msg)
+		logrus.Debug(SuccessCode, data, msg)
 	}
 	Response{SuccessCode, data, msg}.Json(c)
 }
@@ -87,7 +87,7 @@ func OkWithList(list any, count int, c *gin.Context) {
 
 func Fail(code Code, msg string, data any, c *gin.Context) {
 	if global.Config.System.RunMode == "debug" {
-		logrus.Info(SuccessCode, data, msg)
+		logrus.Debug(code, data, msg)
 	}
 	Response{Code: code, Data: data, Msg: msg}.Json(c)
 }
