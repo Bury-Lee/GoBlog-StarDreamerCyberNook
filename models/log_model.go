@@ -20,8 +20,6 @@ type LogModel struct {
 	Addr        string         `gorm:"size:64" json:"addr"`        // 地理位置
 	IsRead      bool           `json:"isRead"`                     // 是否已读
 	LoginStatus bool           `json:"loginStatus"`                // 登录状态
-	Username    string         `gorm:"size:64" json:"username"`    // 登录用户名
-	Pwd         string         `gorm:"size:64" json:"pwd"`         // 登录密码（安全风险，需改进）
 	LoginType   enum.LoginType `json:"loginType"`                  // 登录类型枚举
 	ServiceName string         `gorm:"size:32" json:"serviceName"` // 服务名称
 }
