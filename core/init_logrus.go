@@ -134,7 +134,7 @@ func InitFile(logPath, appName string) {
 	filename := fmt.Sprintf("%s/%s/%s.log", logPath, fileDate, appName)
 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
 	if err != nil {
-		logrus.Error(err)
+		logrus.Error("无法打开日志文件!建议停止程序:", err)
 		return
 	}
 
@@ -153,7 +153,12 @@ func InitLogrus() {
 	logrus.SetOutput(os.Stdout)              // 设置输出类型
 	logrus.SetReportCaller(true)             // 开启返回函数名和行号
 	logrus.SetFormatter(&ConsoleFormatter{}) // 终端用带颜色的 Formatter
-	logrus.SetLevel(logrus.DebugLevel)       // 设置最低的 Level
+	level, err := logrus.ParseLevel(global.Config.Log.LogLevel)
+	if err != nil {
+		logrus.Error(err)
+		panic("日志级别解析失败,请检查配置文件")
+	}
+	logrus.SetLevel(level) // 设置最低的 Level
 	l := global.Config.Log
 	InitFile(l.Dir, l.App)
 }
