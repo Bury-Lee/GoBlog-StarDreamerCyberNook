@@ -36,6 +36,11 @@ func (UserApi) UserInfoUpdateView(c *gin.Context) {
 		response.FailWithMsg(err.Error(), c)
 		return
 	}
+
+	if cr.LikeTags != nil && len(*cr.LikeTags) > 36 {
+		response.FailWithMsg("喜欢的标签数量太多啦", c)
+		return
+	}
 	//ai审核环节
 	if global.Config.AI.Enable { //启用ai审核
 		ctx := context.Background()
