@@ -31,20 +31,15 @@ func (this *SiteApi) SiteInfoView(c *gin.Context) {
 	}
 	if siteInfo.Name == "site" { //基本服务允许使用
 		response.OkWithData(global.Config.Site, c)
+		return
 	}
 	claims, err := jwts.ParseTokenByGin(c)
 	if err != nil {
 		response.FailWithError(err, c)
 		return
 	}
-
+	//TODO:和配置有关的信息再单独开个管理员的路由吧
 	middleware.AdminMiddleware(c) //检查是否为管理员同时检查黑名单
-
-	_, ok := c.Get("claims")
-	if !ok {
-		response.FailWithCode(response.Forbidden, c)
-		return
-	} //TODO:这个方法太怪了,应该有更好的实现方式,后期改一下
 	if claims.Role == enum.AdminRole {
 		var data any
 		switch siteInfo.Name { //以下需要管理员权限
@@ -65,7 +60,7 @@ func (this *SiteApi) SiteInfoView(c *gin.Context) {
 		}
 		response.OkWithData(data, c)
 	} else {
-		response.FailWithCode(response.Forbidden, c)
+		response.FailWithMsg("权限不足", c)
 	}
 }
 
