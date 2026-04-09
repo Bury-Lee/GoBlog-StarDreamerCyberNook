@@ -19,14 +19,14 @@ func main() {
 	global.DB = core.InitDB()                                     //初始化数据库
 	global.RedisTimeCache, global.RedisHotPool = core.InitRedis() //初始化redis
 	global.ES = core.InitElasticSearch()                          //初始化elasticsearch
-	global.LocalAIClient, _ = core.InitAI()                       //初始化AI模型
+	global.LocalAIClient = core.InitAI()                          //初始化AI模型
 
 	flags.Run() //运行命令行参数
 	//debug模式下打印配置
 	if global.Config.System.RunMode == "debug" {
 		configDebug, err := json.MarshalIndent(global.Config, "", "  ")
 		if err != nil {
-			logrus.Error("Failed to marshal config:", err)
+			logrus.Error("反序列化失败:", err)
 			return
 		}
 		logrus.Debug(string(configDebug))

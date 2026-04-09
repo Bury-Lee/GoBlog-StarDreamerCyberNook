@@ -7,10 +7,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func InitAI() (*openai.Client, error) {
+func InitAI() *openai.Client {
 	if !global.Config.AI.Enable {
 		logrus.Info("AI模型已禁用")
-		return nil, nil
+		return nil
 	}
 
 	if global.Config.AI.Model == "local" {
@@ -18,11 +18,11 @@ func InitAI() (*openai.Client, error) {
 		conf.BaseURL = global.Config.AI.Host
 		client := openai.NewClientWithConfig(conf)
 		logrus.Info("模型已加载")
-		return client, nil
+		return client
 	}
 
 	//TODO:加入可用性检测
 
 	//TODO:根据不同厂家返回不同的AI模型客户端
-	return nil, nil
+	return nil
 }
