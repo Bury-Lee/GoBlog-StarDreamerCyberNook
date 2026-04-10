@@ -81,8 +81,7 @@ db:
     host:         # 数据库主机地址
     port:               # 数据库端口
     db_name:              # 数据库名
-    debug:             # 是否启用调试模式（打印SQL日志）
-    sql_name:           # 数据库类型,支持Mysql,Sqlite(不建议),postgrasql
+    sql_name:           # 数据库类型,支持Mysql,Sqlite(不建议),postgresql
   # 示例：可配置多个数据库实例
   # - user: root
   #   password: root

@@ -10,31 +10,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// import "fmt"
-
-// type DB struct {
-// 	User     string `yaml:"user"`
-// 	Password string `yaml:"password"`
-// 	Host     string `yaml:"host"`
-// 	Port     int    `yaml:"port"`
-// 	DB       string `yaml:"db"`
-// 	Debug    bool   `yaml:"debug"`  //是否启用打印全部消息
-// 	Source   string `yaml:"source"` //数据库的源,默认mysql,可能会有pgsql
-// }
-
-// func (this *DB) DSN() string { //应该不用使用结构体复制
-// 	if this.Source != "mysql" {
-// 		return "DB.source填写不符合标准?"
-// 	}
-// 	return fmt.Sprintf(
-// 		"%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-// 		this.User, this.Password, this.Host, this.Port, this.DB)
-// }
-
-// func (this *DB) Empty() bool {
-// 	return this.User == "" && this.Password == "" && this.Host == "" && this.Port == 0
-// }
-
 type SqlName string
 
 type DB struct {

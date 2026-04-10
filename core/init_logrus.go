@@ -150,8 +150,10 @@ func InitFile(logPath, appName string) {
 }
 
 func InitLogrus() {
-	logrus.SetOutput(os.Stdout)              // 设置输出类型
-	logrus.SetReportCaller(true)             // 开启返回函数名和行号
+	logrus.SetOutput(os.Stdout) // 设置输出类型
+	if global.Config.System.RunMode == "debug" {
+		logrus.SetReportCaller(true) // 开启返回函数名和行号
+	}
 	logrus.SetFormatter(&ConsoleFormatter{}) // 终端用带颜色的 Formatter
 	level, err := logrus.ParseLevel(global.Config.Log.LogLevel)
 	if err != nil {
