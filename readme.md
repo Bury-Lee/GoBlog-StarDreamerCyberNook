@@ -55,6 +55,34 @@ docker compose -f init/Redis/docker-compose.yml up -d
 docker compose -f init/ES/docker-compose.yml up -d
 ```
 
+### 3.2 编译项目:
+
+Windows AMD64 位可执行文件：
+
+```bash
+set GOOS=windows
+set GOARCH=amd64
+set CGO_ENABLED=0
+go build -ldflags="-s -w" -trimpath -o main_windows_amd64.exe .\main.go
+```
+
+Linux AMD64 位可执行文件：
+```bash
+set GOOS=linux
+set GOARCH=amd64
+set CGO_ENABLED=0
+go build -ldflags="-s -w" -trimpath -o main_linux_amd64 .\main.go
+```
+
+MacOS AMD64 位可执行文件：
+```bash
+set GOOS=darwin
+set GOARCH=amd64
+set CGO_ENABLED=0
+go build -ldflags="-s -w" -trimpath -o main_macos_amd64 .\main.go
+```
+
+
 ### 3.2 修改主配置 `setting.yaml`
 
 建议优先确认以下关键字段：
