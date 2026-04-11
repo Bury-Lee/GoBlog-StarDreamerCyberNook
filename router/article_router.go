@@ -19,6 +19,7 @@ func ArticleRouter(r *gin.RouterGroup) {
 	r.DELETE("/article/top", middleware.AuthMiddleware, app.ArticleCancleTopView)          //取消置顶
 	r.DELETE("/article/admingTop", middleware.AdminMiddleware, app.AdminArticleDeleteView) //管理员取消置顶
 
+	r.GET("/article/review", middleware.AdminMiddleware, app.ArticleReviewListView)  //获取审核文章列表
 	r.POST("/article/review/:id", middleware.AdminMiddleware, app.ArticleReviewView) //审核文章
 
 	r.POST("/article/look", middleware.AuthMiddleware, app.ArticleLookView)       //创建浏览记录,这样单独加个接口还能开无痕模式设置
