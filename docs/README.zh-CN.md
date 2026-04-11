@@ -6,6 +6,13 @@
 
 **其他语言：**:[🇨🇳 中文](README.zh-CN.md) • [🇺🇸 English](../README.md) • [🇯🇵 日本語](README.ja.md) • [🇰🇷 한국어](README.ko.md)
 
+## 👤 适合人群:
+
+- 追求独立与自主的技术爱好者：希望拥有完全可控的个人博客或社区平台，不依赖第三方内容平台的规则限制，追求个性化定制和数据主权
+- 拥有小型服务器的站长：具备基础服务器资源（如VPS、云主机或家用服务器），希望搭建稳定可靠的图文内容服务
+- 社区运营者：需要搭建垂直领域的交流社区、官方论坛或轻量化内容平台，支持用户互动、内容审核和SEO优化
+- 注重隐私与数据安全的用户：不愿将核心内容数据托管于商业平台，希望实现本地化部署和自主备份
+
 ## 📋 功能速览
 
 - **博客与社区一体化**：文章、评论、收藏、消息、关注、私聊集中在同一套后端
@@ -38,13 +45,13 @@ go-blog
 
 ## 🔧 环境要求
 
-| 组件 | 版本要求 | 备注 |
-|------|----------|------|
-| Go | 1.26.0 | 按项目 `go.mod` 版本 |
-| MySQL | 5.7 | 项目内提供 docker-compose |
-| Redis | 7 | 项目内提供 docker-compose，双实例 |
-| Elasticsearch | 7.17.x | 项目使用 `olivere/elastic/v7` |
-| AI 服务 | 可选 | 默认配置示例：`http://localhost:1234/v1` (目前仅支持本地模型) |
+| 组件            | 版本要求   | 备注                                            |
+| ------------- | ------ | --------------------------------------------- |
+| Go            | 1.26.0 | 按项目 `go.mod` 版本                               |
+| MySQL         | 5.7    | 项目内提供 docker-compose                          |
+| Redis         | 7      | 项目内提供 docker-compose，双实例                      |
+| Elasticsearch | 7.17.x | 项目使用 `olivere/elastic/v7`                     |
+| AI 服务         | 可选     | 默认配置示例：`http://localhost:1234/v1` (目前仅支持本地模型) |
 
 ## 🚀 快速启动
 
@@ -62,31 +69,36 @@ docker compose -f init/Redis/docker-compose.yml up -d
 # 启动 Elasticsearch
 docker compose -f init/ES/docker-compose.yml up -d
 ```
+
 在写完配置文件后执行发行版程序:
 
 Windows
+
 ```bash
 # 启动项目
 .\main_windows_amd64.exe
 ```
+
 Linux
+
 ```bash
 # 启动项目
 ./main_linux_amd64
 ```
+
 macOS
+
 ```bash
 # 启动项目
 ./main_macos_amd64
 ```
-
-
 
 > 💡 **提示**：由于 MySQL 5.7 以上版本和 Canal 之间的兼容性不是特别好，故在 `init/SQL/docker-compose.yml` 中配置了 `5.7.360.0` 版本。
 
 ### 2️⃣ 编译项目
 
 #### Windows AMD64
+
 ```bash
 set GOOS=windows
 set GOARCH=amd64
@@ -95,6 +107,7 @@ go build -ldflags="-s -w" -trimpath -o main_windows_amd64.exe .\main.go
 ```
 
 #### Linux AMD64
+
 ```bash
 set GOOS=linux
 set GOARCH=amd64
@@ -103,6 +116,7 @@ go build -ldflags="-s -w" -trimpath -o main_linux_amd64 .\main.go
 ```
 
 #### macOS AMD64
+
 ```bash
 set GOOS=darwin
 set GOARCH=amd64
@@ -275,15 +289,16 @@ go run main.go -f setting.yaml
 
 ## 📝 命令行参数
 
-| 参数 | 说明 |
-|------|------|
-| `-f` | 配置文件路径（默认 `setting.yaml`） |
-| `-db` | 执行 GORM 自动迁移 |
-| `-es` | 创建/重建 ES 索引 |
-| `-v` | 查看版本 |
-| `-t user -s create` | 命令行创建用户 |
+| 参数                  | 说明                        |
+| ------------------- | ------------------------- |
+| `-f`                | 配置文件路径（默认 `setting.yaml`） |
+| `-db`               | 执行 GORM 自动迁移              |
+| `-es`               | 创建/重建 ES 索引               |
+| `-v`                | 查看版本                      |
+| `-t user -s create` | 命令行创建用户                   |
 
 **示例：**
+
 ```bash
 go run main.go -t user -s create
 ```
@@ -300,7 +315,7 @@ go run main.go -t user -s create
 
 ### 📍 背景
 
-项目原生只做读写分离，不做跨库自动同步。  
+项目原生只做读写分离，不做跨库自动同步。\
 `otherSoftware` 提供了一个简易方案：
 
 - `otherSoftware/canal`：Canal Server，订阅 MySQL binlog
@@ -367,13 +382,13 @@ go run samples/main.go
 
 ## ❓ 常见问题
 
-| 问题 | 解决方案 |
-|------|----------|
-| **MySQL 连接失败** | 检查 `setting.yaml` 与 Canal 的账号密码、端口是否一致 |
-| **ES 启动失败** | 确认 `http://127.0.0.1:9200` 可访问，账号密码匹配 |
-| **Redis 警告淘汰策略** | 项目会检查动态 Redis 的 `maxmemory-policy` |
-| **接口 404** | 注意当前接口带 `/api` 前缀，应访问 `/api/user/login` 这类路径 |
-| **Canal 无数据** | 优先检查 binlog 是否开启、`instance.properties` 的主库地址/账号、订阅规则是否匹配 |
+| 问题               | 解决方案                                                     |
+| ---------------- | -------------------------------------------------------- |
+| **MySQL 连接失败**   | 检查 `setting.yaml` 与 Canal 的账号密码、端口是否一致                   |
+| **ES 启动失败**      | 确认 `http://127.0.0.1:9200` 可访问，账号密码匹配                    |
+| **Redis 警告淘汰策略** | 项目会检查动态 Redis 的 `maxmemory-policy`                       |
+| **接口 404**       | 注意当前接口带 `/api` 前缀，应访问 `/api/user/login` 这类路径             |
+| **Canal 无数据**    | 优先检查 binlog 是否开启、`instance.properties` 的主库地址/账号、订阅规则是否匹配 |
 
 ## 💡 仅开发者提示
 
@@ -385,7 +400,7 @@ go run samples/main.go
 如果在部署或使用过程中遇到任何问题，欢迎通过以下方式反馈：
 
 - **🐛 GitHub Issues**: 在 [项目仓库](https://github.com/Bury-Lee/go-blog) 提交 Issue
-- **📧 邮箱联系**: [18151161@qq.com](mailto:18151161@qq.com)
-- **👥 交流群**: [星梦的交流群](https://qun.qq.com/universal-share/share?ac=1&authKey=2MOKPRKsyf8SGY12y3L%2By8yC53zfKakQDg5qiZvgz46DHm%2Bil90q6MuER5XVKo4g&busi_data=eyJncm91cENvZGUiOiIxMDk4NDgzNzk0IiwidG9rZW4iOiJMdTVWVWFQK3pMYXdteDdrVzF5MzE1Nm12SDlHLy9PYm1zZXJBUm5peGxKcGptdHoxcXhacWtsSlNNTDN6S3hVIiwidWluIjoiMTgxNTExNjEifQ%3D%3D&data=71mrINsJgoFhsfYAIO6n6qMWIh9Fi73oWgVrPeRDFjKIwlhBnVaCGFKx5Hr73xvNrEsKaAIk-gvPCV2nkslvHQ&svctype=4&tempid=h5_group_info)
+- **📧 邮箱联系**: <18151161@qq.com>
+- **👥 交流群**: [星梦的交流群](https://qun.qq.com/universal-share/share?ac=1\&authKey=2MOKPRKsyf8SGY12y3L%2By8yC53zfKakQDg5qiZvgz46DHm%2Bil90q6MuER5XVKo4g\&busi_data=eyJncm91cENvZGUiOiIxMDk4NDgzNzk0IiwidG9rZW4iOiJMdTVWVWFQK3pMYXdteDdrVzF5MzE1Nm12SDlHLy9PYm1zZXJBUm5peGxKcGptdHoxcXhacWtsSlNNTDN6S3hVIiwidWluIjoiMTgxNTExNjEifQ%3D%3D\&data=71mrINsJgoFhsfYAIO6n6qMWIh9Fi73oWgVrPeRDFjKIwlhBnVaCGFKx5Hr73xvNrEsKaAIk-gvPCV2nkslvHQ\&svctype=4\&tempid=h5_group_info)
 
 作者非常乐意解决有价值的技术问题，也欢迎提交 PR 参与项目贡献！

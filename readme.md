@@ -4,7 +4,14 @@ A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, 
 
 ## 🌐 Multilingual Documentation
 
-**Languages:** :[🇨🇳 中文](docs/README.zh-CN.md) • [🇺🇸 English](README.md) • [🇯🇵 日本語](docs/README.ja.md) • [🇰🇷 한국어](docs/README.ko.md)
+**Languages:** [🇨🇳 中文](docs/README.zh-CN.md) • [🇺🇸 English](README.md) • [🇯🇵 日本語](docs/README.ja.md) • [🇰🇷 한국어](docs/README.ko.md)
+
+## 👤 Who Is It For?
+
+- **Tech enthusiasts who want full control**: Build a fully self-hosted personal blog or community without relying on third-party platform rules; prioritize customization and data ownership
+- **Site owners with a small server**: Have basic server resources such as a VPS, cloud instance, or home server and want a stable text-and-image content service
+- **Community operators**: Need a vertical community, official forum, or lightweight content platform with user interaction, content moderation, and SEO optimization
+- **Privacy and data security minded users**: Prefer local deployment and self-managed backups instead of hosting core content data on commercial platforms
 
 
 ## 📋 Features Overview
