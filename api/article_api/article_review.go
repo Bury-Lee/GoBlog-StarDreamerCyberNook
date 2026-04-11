@@ -1,6 +1,7 @@
 package article_api
 
 import (
+	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
@@ -11,7 +12,34 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type ArticleExamineRequest struct {
+type ArticleReviewListViewRequest struct {
+	common.PageInfo
+	UserID uint `form:"userID"` //可以指定选择谁的文章
+}
+
+func (ArticleApi) ArticleReviewListView(c *gin.Context) {
+	var req ArticleReviewListViewRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.FailWithMsg("参数错误", c)
+		return
+	}
+	option := common.Options{
+		PageInfo: req.PageInfo,
+		Preloads: []string{"UserModel"},
+		Where:    global.DB.Where("status = ?", models.StatusDraft),
+	}
+	if req.UserID != 0 {
+		option.Where = option.Where.Where("user_id = ?", req.UserID)
+	}
+	list, count, err := common.ListQuery[models.ArticleModel](&models.ArticleModel{}, option)
+	if err != nil {
+		response.FailWithMsg("查询失败", c)
+		return
+	}
+	response.OkWithList(list, count, c)
+}
+
+type ArticleReviewRequest struct {
 	ArticleID uint          `json:"articleID" binding:"required"`
 	Status    models.Status `json:"status" binding:"required"` //审核状态,2为通过,1,3为不通过
 	Msg       string        `json:"msg"`                       // 为4的时候，传递进来
@@ -19,7 +47,7 @@ type ArticleExamineRequest struct {
 
 func (ArticleApi) ArticleReviewView(c *gin.Context) {
 	// TODO:审核改为使用AI,在Canal哪里用go连接一个Python脚本,Python脚本配置几个ai,让ail审核文章,审核通过就更新文章的状态为3,审核不通过就更新文章的状态为1
-	var req ArticleExamineRequest
+	var req ArticleReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.FailWithMsg("参数错误", c)
 		return
