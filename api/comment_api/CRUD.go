@@ -381,14 +381,8 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 		return
 	}
 	var comment models.CommentModel
-	err := global.DB.Take(&comment, req.ID).Error
-	if err != nil {
-		response.FailWithMsg("评论不存在", c)
-		return
-	}
-
 	claim := jwts.GetClaims(c) //要先登录才能点赞
-	if global.DB.Take(&models.CommentDiggModel{}, "user_id = ? and comment_id = ?", claim.UserID, req.ID).Error == gorm.ErrRecordNotFound {
+	if err := global.DB.Take(&comment, "user_id = ? and comment_id = ?", claim.UserID, req.ID).Error; err == gorm.ErrRecordNotFound {
 		//查询不到说明没有点赞过,可以点赞
 		if global.DB.Create(&models.CommentDiggModel{
 			UserID:    claim.UserID,
@@ -398,6 +392,10 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 			return
 		}
 		redis_count.SetCacheCommentDigg(req.ID, true) //增量加一
+	} else if err != nil {
+		logrus.Error("点赞操作失败,评论ID:", req.ID, "用户ID:", claim.UserID, "错误信息:", err)
+		response.FailWithMsg("操作失败", c)
+		return
 	} else {
 		// 查询到说明已经点赞过,取消点赞
 		if global.DB.Delete(&models.CommentDiggModel{}, "user_id = ? and comment_id = ?", claim.UserID, req.ID).Error != nil {
@@ -406,6 +404,5 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 		}
 		redis_count.SetCacheCommentDigg(req.ID, false) //增量减一
 	}
-
 	response.OkWithData(claim, c)
 }
