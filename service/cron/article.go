@@ -11,8 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//异步双写实现计数同步
-
+// 异步双写实现计数同步
 // SyncArticle 同步Redis中的文章增量统计到数据库
 // 逻辑流程：拉取ID -> 读取数据 -> 拼接SQL -> 执行更新 -> 确认回写
 // 此处一次更新多个字段,对内存有更高的要求,如果内存不足可以牺牲性能,分多几批更新,一次弹出一个字段的更新
@@ -21,7 +20,7 @@ func SyncArticle() {
 	total := 0
 	batchIndex := 0
 
-	// 1. 循环拉取批次
+	// 循环拉取批次
 	for {
 		batchIndex++
 		// 逻辑点A: 从Redis弹出一批脏ID
@@ -30,21 +29,21 @@ func SyncArticle() {
 			break
 		}
 
-		// 2. 根据ID批量获取具体的计数增量
+		// 根据ID批量获取具体的计数增量
 		// 逻辑点B: 这里假设Redis中存储的是每个ID的增量值
 		collectMap := redis_count.GetAllCacheCollect(ids)
 		diggMap := redis_count.GetAllCacheDigg(ids)
 		lookMap := redis_count.GetAllCacheLook(ids)
 		comMap := redis_count.GetAllCacheComment(ids)
 
-		// 3. 准备SQL构建数据
+		// 准备SQL构建数据
 		flushIDs := make([]uint, 0, len(ids))
 		lookCases := make([]string, 0, len(ids))
 		diggCases := make([]string, 0, len(ids))
 		collCases := make([]string, 0, len(ids))
 		comCases := make([]string, 0, len(ids))
 
-		// 4. 数据清洗与SQL片段构建
+		// 数据清洗与SQL片段构建
 		for _, id := range ids {
 			look := lookMap[id]
 			digg := diggMap[id]
@@ -88,7 +87,7 @@ func SyncArticle() {
 			continue
 		}
 
-		// 7. 数据库更新成功，清理Redis缓存
+		// 数据库更新成功，清理Redis缓存
 		redis_count.AckArticleSync(flushIDs, lookMap, diggMap, collectMap, comMap)
 		total += len(flushIDs)
 		logrus.Infof("批量更新成功 [批次 %d, 数量 %d]", batchIndex, len(flushIDs))

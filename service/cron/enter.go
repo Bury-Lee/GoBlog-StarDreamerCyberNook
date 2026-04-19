@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func CronArticle() {
+func Cron() {
 
 	var crontab *cron.Cron
 	timezone, err := time.LoadLocation("Asia/Shanghai")

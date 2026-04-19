@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"StarDreamerCyberNook/global"
+	"StarDreamerCyberNook/utils"
 	"encoding/base64"
 	"io"
 	"os"
+	"strings"
 )
 
 // encodeImageToBase64 将图片文件编码为base64字符串
@@ -22,4 +25,34 @@ func EncodeImageToBase64(imagePath string) (string, error) {
 
 	encoded := base64.StdEncoding.EncodeToString(buf[:n])
 	return encoded, nil
+}
+
+func ImageSuffixJudge(filename string) (string, bool) {
+	_list := strings.Split(filename, ".")
+	var suffix string
+	if len(_list) == 1 {
+		return suffix, false
+	}
+	suffix = _list[len(_list)-1]
+	if !utils.InList(suffix, global.Config.Upload.WhiteList) {
+		return suffix, false
+	}
+	return suffix, true
+}
+
+func GetContentType(suffix string) string {
+	switch strings.ToLower(suffix) {
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	case "svg":
+		return "image/svg+xml"
+	default:
+		return "application/octet-stream"
+	}
 }

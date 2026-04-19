@@ -5,9 +5,6 @@ package models
 
 import (
 	"fmt"
-	"os"
-
-	"gorm.io/gorm"
 )
 
 //TODO:改造一下,允许视频类型的存储?
@@ -29,12 +26,4 @@ type ImageModel struct {
 // 说明: TODO:根据实际情况修改路径格式，目前只是占位实现
 func (i ImageModel) WebPath() string {
 	return fmt.Sprintf("/%s", i.Path)
-}
-
-// BeforeDelete 删除前的钩子函数
-// 参数: tx - GORM数据库事务
-// 返回: error - 删除过程中的错误
-// 说明: 在数据库记录删除时，同步删除物理文件
-func (l ImageModel) BeforeDelete(tx *gorm.DB) error {
-	return os.Remove(l.Path)
 }

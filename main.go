@@ -20,6 +20,12 @@ func main() {
 	global.RedisTimeCache, global.RedisHotPool = core.InitRedis() //初始化redis
 	global.ES = core.InitElasticSearch()                          //初始化elasticsearch
 	global.LocalAIClient = core.InitAI()                          //初始化AI模型
+	if global.Config.ObjectStorage.Enable {
+		logrus.Infof("对象存储已启用,存储桶:%s", global.Config.ObjectStorage.Bucket)
+		global.StorageClient = core.InitClient()
+	} else {
+		logrus.Info("对象存储未启用,使用本地存储")
+	}
 
 	flags.Run() //运行命令行参数
 	//debug模式下打印配置
@@ -32,8 +38,10 @@ func main() {
 		logrus.Debug(string(configDebug))
 	}
 
-	// 启动定时任务
-	go cron_service.CronArticle()
+	if global.Config.System.Cron { //当在分布式环境下时建议只启用一个实例的定时任务,避免导致并发下的多写问题
+		// 启动定时任务
+		go cron_service.Cron()
+	}
 
 	router := router.InitRouter() //注册路由
 	server := core.InitServer(router)
