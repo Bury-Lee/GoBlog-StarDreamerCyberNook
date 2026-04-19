@@ -7,6 +7,7 @@ import (
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/minio/minio-go/v7"
 	"github.com/mojocn/base64Captcha"
 	"github.com/olivere/elastic/v7"
 	"github.com/sashabaranov/go-openai"
@@ -23,6 +24,7 @@ var (
 	ES               *elastic.Client
 	LocalAIClient    *openai.Client
 	IPsearcher       *xdb.Searcher
+	StorageClient    *minio.Client
 )
 
 type SystemPrompt string

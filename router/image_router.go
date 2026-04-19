@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ImageRouter(r *gin.RouterGroup) { //图片路由注册函数
+func LocalImageRouter(r *gin.RouterGroup) { //图片路由注册函数
 	api := api.App.ImageApi
 	//TODO:上线前一定要检查debug删除了没有
 	// r.POST("/images", middleware.AuthMiddleware, api.ImageUploadView)

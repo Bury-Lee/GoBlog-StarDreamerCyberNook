@@ -7,6 +7,7 @@ import (
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/log_service"
 	"fmt"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -80,13 +81,20 @@ func (ImageApi) ImageRemoveView(c *gin.Context) {
 	global.DB.Find(&list, "id IN ?", req.IDlist)
 
 	// 批量删除图片
+	//TODO:迟点再检查一下这里
 	if len(list) > 0 {
 		err := global.DB.Delete(&list).Error
 		if err != nil {
 			logrus.Error(fmt.Sprintf("删除失败:%s", err))
+		} else {
+			for _, img := range list { //同步删除本地物理文件
+				if err := os.Remove(img.Path); err != nil {
+					logrus.Error(fmt.Sprintf("删除本地文件失败:%s", err))
+					continue
+				}
+			}
 		}
 	}
-	//TODO:考虑加入返回操作成功失败的个数
 	response.OkWithMsg(fmt.Sprintf("图片删除成功,共删除%d张", len(list)), c)
 }
 
@@ -98,7 +106,6 @@ func (ImageApi) GetImage(c *gin.Context) {
 	id := c.Query("id")
 
 	var img models.ImageModel
-	// 构建图片路径 TODO:改为从配置中获取并且与图片上传的路径同步
 	// 查询图片是否存在
 	if global.DB.Take(&img, "id = ?", id).Error != nil {
 		response.FailWithMsg("图片已被删除", c)

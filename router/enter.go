@@ -32,12 +32,19 @@ func InitRouter() *gin.Engine {
 	nr.Use(middleware.ActLimitMiddleware) //防攻击中间件
 	SiteRouter(nr)                        //已测试完毕
 	LogRouter(nr)                         //由于条件问题,待测
-	ImageRouter(nr)                       //已测试完毕
-	BannerRouter(nr)                      //已测试完毕
-	UserRouter(nr)                        //已测试完毕
-	CaptcharRouter(nr)                    //已测试完毕
-	ArticleRouter(nr)                     //已测试完毕
-	CommentRouter(nr)                     //已测试完毕
+
+	if global.Config.ObjectStorage.Enable {
+
+	} else {
+		//如果对象存储未启用,则使用本地存储
+		LocalImageRouter(nr) //已测试完毕
+	}
+
+	BannerRouter(nr)   //已测试完毕
+	UserRouter(nr)     //已测试完毕
+	CaptcharRouter(nr) //已测试完毕
+	ArticleRouter(nr)  //已测试完毕
+	CommentRouter(nr)  //已测试完毕
 	MessageRouter(nr)
 	ChatRouter(nr)
 	AIRouter(nr) //已测试完毕

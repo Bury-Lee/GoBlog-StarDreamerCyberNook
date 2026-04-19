@@ -97,8 +97,8 @@ func (SiteApi) SiteUpdateView(c *gin.Context) {
 		var data conf.QQ
 		err = c.ShouldBindJSON(&data)
 		rep = data
-	case "qiNiu":
-		var data conf.QiNiu
+	case "objectStorage":
+		var data conf.ObjectStorage
 		err = c.ShouldBindJSON(&data)
 		rep = data
 	case "ai":
@@ -133,11 +133,11 @@ func (SiteApi) SiteUpdateView(c *gin.Context) {
 			s.AppKey = global.Config.QQ.AppKey
 		}
 		global.Config.QQ = s
-	case conf.QiNiu:
+	case conf.ObjectStorage:
 		if s.SecretKey == "******" {
-			s.SecretKey = global.Config.QiNiu.SecretKey
+			s.SecretKey = global.Config.ObjectStorage.SecretKey
 		}
-		global.Config.QiNiu = s
+		global.Config.ObjectStorage = s
 	case conf.AI:
 		if s.ApiKey == "******" {
 			s.ApiKey = global.Config.AI.ApiKey
