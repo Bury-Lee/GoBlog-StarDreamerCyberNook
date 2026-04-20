@@ -38,14 +38,14 @@ upload:
   size:                     # 上传文件大小限制，单位MB
   # 上传文件白名单（图片格式）
   whiteList:
-    ".jpg": ~               # JPEG格式
-    ".jpeg": ~              # JPEG格式
-    ".png": ~               # PNG格式
-    ".gif": ~               # GIF格式
-    ".webp": ~              # WebP格式
-    ".bmp": ~               # BMP格式
-    ".tiff": ~              # TIFF格式
-    ".svg": ~               # SVG格式
+    "jpg": ~               # JPEG格式
+    "jpeg": ~              # JPEG格式
+    "png": ~               # PNG格式
+    "gif": ~               # GIF格式
+    "webp": ~              # WebP格式
+    "bmp": ~               # BMP格式
+    "tiff": ~              # TIFF格式
+    "svg": ~               # SVG格式
   uploadDir: images         # 图片上传目录
 
 # JWT认证配置
@@ -91,6 +91,17 @@ db:
   #   db_name: db
   #   debug: false
   #   SqlName: mysql
+
+objectStorage:
+  enable: true                     # 启用对象存储，true表示使用RustFS
+  accessKey:            # 与docker-compose.yml中的RUSTFS_ACCESS_KEY一致
+  secretKey:             # 与docker-compose.yml中的RUSTFS_SECRET_KEY一致
+  bucket:             # 存储桶名称，你需要提前在RustFS中创建
+  host:   # RustFS服务地址，使用S3 API端口
+  uri: ""                          # (TODO:自定义URI路径,用于在返回时返回文件URL而不保留端口)
+  region:             # 区域，默认值
+  prefix:               # 文件前缀，如 uploads/images/
+  size:                 # 文件大小限制(mb)
 
 # 网站站点配置
 site:

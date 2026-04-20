@@ -8,7 +8,6 @@ import (
 	"StarDreamerCyberNook/utils"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -31,7 +30,8 @@ func (ImageApi) ImageUploadView(c *gin.Context) {
 	}
 	// 后缀判断
 	filename := fileHeader.Filename
-	suffix, ok := imageSuffixJudge(filename)
+	suffix, ok := utils.ImageSuffixJudge(filename)
+	//debug
 	if !ok {
 		response.FailWithMsg("文件名非法:"+filename, c)
 		return
@@ -71,16 +71,16 @@ func (ImageApi) ImageUploadView(c *gin.Context) {
 	response.Ok(model.ID, "图片上传成功", c)
 }
 
-func imageSuffixJudge(filename string) (string, bool) { //判断文件后缀是否在白名单中,不在则返回false
-	_list := strings.Split(filename, ".")
-	var suffix string
-	if len(_list) == 1 {
-		return suffix, false
-	}
-	// xxx.jpg   xxx  xxx.jpg.exe
-	suffix = _list[len(_list)-1]
-	if !utils.InList(suffix, global.Config.Upload.WhiteList) {
-		return suffix, false
-	}
-	return suffix, true
-}
+// func imageSuffixJudge(filename string) (string, bool) { //判断文件后缀是否在白名单中,不在则返回false
+// 	_list := strings.Split(filename, ".")
+// 	var suffix string
+// 	if len(_list) == 1 {
+// 		return suffix, false
+// 	}
+// 	// xxx.jpg   xxx  xxx.jpg.exe
+// 	suffix = _list[len(_list)-1]
+// 	if !utils.InList(suffix, global.Config.Upload.WhiteList) {
+// 		return suffix, false
+// 	}
+// 	return suffix, true
+// }
