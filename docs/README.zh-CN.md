@@ -129,39 +129,41 @@ system:
   ip: 0.0.0.0
   port: 8080
   env: dev
-  gin_mode: debug # Gin 运行模式：debug 或 release
+  run_mode: debug # Gin 运行模式：debug 或 release
+  cron: true             # 是否启用定时任务,分布式环境下建议仅保留几个开启,其他节点关闭定时任务(反正开了没有锁也执行不了)
 
 log:
   app: GoBlog
   dir: log
   log_level: debug
-
 ai:
-  enable: true
+  enable: false
   model: local
+  # temperature: 0.7 # 预留字段
+  # max_tokens: 1024 # 预留字段
   host: http://localhost:1234/v1
-  ApiKey: 123456
+  ApiKey: 123456 
   nickName: 昵称
   avatar: "https://example.com/avatar.jpg" # TODO：后续适配头像来源
 
 email:
   domain: smtp.qq.com
   port: 587 # QQ 邮箱常用端口为 587 或 465
-  sendEmail: xxxxxx@qq.com
+  sendEmail: 1287167895@qq.com
   authCode: "xxxxxxx" # 邮箱授权码
   sendNickname: 昵称
 
 upload:
   size: 20 # 上传文件大小限制，单位 MB
   whiteList: # 上传文件白名单
-    ".jpg": ~
-    ".jpeg": ~
-    ".png": ~
-    ".gif": ~
-    ".webp": ~
-    ".bmp": ~
-    ".tiff": ~
-    ".svg": ~
+    "jpg": ~
+    "jpeg": ~
+    "png": ~
+    "gif": ~
+    "webp": ~
+    "bmp": ~
+    "tiff": ~
+    "svg": ~
   uploadDir: images # 图片上传目录
 
 jwt:
@@ -191,10 +193,9 @@ db:
   - user: root
     password: root
     host: 127.0.0.1
-    port: 3306
+    port: 5432
     db_name: db
-    debug: false # 是否启用调试（打印完整日志）
-    sql_name: mysql
+    sql_name: postgresql
   # - user: root # 可按此格式继续添加多个数据库
   #   password: root
   #   host: 127.0.0.1
@@ -239,7 +240,7 @@ site:
 
   article:
     # 说明：Go 字段名是 DisableExamination，但 yaml tag 是 enableExamination
-    # 若以 enableExamination 读取：true 表示"启用审核"（即不禁用）
+    # 若以 enableExamination 读取：true 表示“启用审核”（即不禁用）
     # 业务语义：true = 需要审核，false = 无需审核
     enableExamination: true
 
@@ -248,6 +249,18 @@ site:
     usernamePassword: true
     emailLogin: true # TODO：可考虑固定开启（基础登录方式）
     captcha: false # 是否启用验证码
+
+
+objectStorage:
+  enable: true                     # 启用对象存储，true表示使用RustFS
+  accessKey: "admin"               # 与docker-compose.yml中的RUSTFS_ACCESS_KEY一致
+  secretKey: "123456"              # 与docker-compose.yml中的RUSTFS_SECRET_KEY一致
+  bucket: "test"              # 存储桶名称，你需要提前在RustFS中创建
+  host: "http://127.0.0.1:9000"    # RustFS服务地址，使用S3 API端口
+  uri: ""                          # (TODO:自定义URI路径)
+  region: "us-east-1"              # 区域，默认值
+  prefix: "uploads/"               # 文件前缀，如 uploads/images/
+  size: 10                   # 文件大小限制(字节)，默认10MB (10*1024*1024)
 ```
 
 </details>
