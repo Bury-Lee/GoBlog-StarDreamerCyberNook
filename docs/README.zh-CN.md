@@ -131,6 +131,7 @@ system:
   env: dev
   run_mode: debug # Gin 运行模式：debug 或 release
   cron: true             # 是否启用定时任务,分布式环境下建议仅保留几个开启,其他节点关闭定时任务(反正开了没有锁也执行不了)
+  scheduled_cleanup: true    # 是否启用浏览记录清理功能
 
 log:
   app: GoBlog

@@ -128,6 +128,8 @@ system:
   port: 8080
   env: dev
   gin_mode: debug # Gin run mode: debug or release
+  cron: true             # Whether to enable scheduled tasks
+  scheduled_cleanup: true    # Whether to enable scheduled cleanup of visit records
 
 log:
   app: GoBlog
