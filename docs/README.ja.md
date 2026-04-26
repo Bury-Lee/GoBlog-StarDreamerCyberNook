@@ -126,6 +126,8 @@ system:
   port: 8080
   env: dev
   gin_mode: debug # Gin実行モード：debugまたはrelease
+  cron: true             # 定時タスクを有効にするか
+  scheduled_cleanup: true    # 30日前の訪問記録を自動削除するか
 
 log:
   app: GoBlog

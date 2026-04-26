@@ -128,6 +128,8 @@ system:
   port: 8080
   env: dev
   gin_mode: debug # Gin 실행 모드: debug 또는 release
+  cron: true             # 정기 작업 활성화 여부
+  scheduled_cleanup: true    # 정기 작업 활성화 여부, 30일 전의 방문 기록을 삭제합니다
 
 log:
   app: GoBlog
