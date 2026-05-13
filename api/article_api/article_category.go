@@ -95,7 +95,14 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 		req.UserID = claims.UserID
 	case "other":
 		if req.UserID == 0 {
-			response.FailWithMsg("用户ID不能为空", c)
+			var categoryIDs []uint
+			global.DB.Model(&models.ArticleModel{}).
+				Where("status = ? AND category_id > 0", models.StatusPublished).
+				Distinct("category_id").
+				Pluck("category_id", &categoryIDs)
+			var categoryList []models.CategoryModel
+			global.DB.Where("id IN ?", categoryIDs).Find(&categoryList)
+			response.OkWithList(categoryList, len(categoryList), c)
 			return
 		}
 	case "admin":

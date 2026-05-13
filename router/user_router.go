@@ -11,6 +11,7 @@ func UserRouter(r *gin.RouterGroup) {
 	app := api.App.UserApi
 	r.POST("/user/send_email", middleware.CaptchaMiddleware, middleware.ActLimitMiddleware, app.SendEmailView)
 	r.POST("/user/email", middleware.EmailVerifyMiddleware, app.RegisterEmailView)                                                                    //邮箱注册
+	r.POST("/user/register", middleware.EmailVerifyMiddleware, app.RegisterEmailView)                                                                  //邮箱注册（兼容性别名）
 	r.POST("/user/login", middleware.CaptchaMiddleware, app.Login)                                                                                    //登录
 	r.DELETE("/user/logout", middleware.AuthMiddleware, app.LogoutView)                                                                               //发送邮箱验证码
 	r.GET("/user/detail", middleware.AuthMiddleware, app.UserDetailView)                                                                              //获取用户详情
