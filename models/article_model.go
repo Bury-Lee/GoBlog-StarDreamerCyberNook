@@ -99,6 +99,22 @@ type ArticleSearchModel struct {
 	Abstract  string       `gorm:"size:256;index:idx_abstractSearch" json:"abstract"` // 文章摘要，加索引
 }
 
+// truncateText 按字符数截断文本
+// 参数:text - 原始文本
+// 参数:maxLen - 最大字符数
+// 返回:string - 截断后的文本
+// 说明:按rune截断，避免中文等多字节字符被截断
+func truncateText(text string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= maxLen {
+		return string(runes)
+	}
+	return string(runes[:maxLen])
+}
+
 //文章创建时自动创建,并更新全文搜索记录
 // 文章更新时,也会更新全文搜索记录
 //删除时也会删除全文搜索记录
@@ -118,8 +134,8 @@ func (this *ArticleModel) AfterCreate(tx *gorm.DB) (err error) {
 	for _, model := range textList {
 		list = append(list, ArticleSearchModel{
 			ArticleID: this.ID,
-			Title:     model.Head,
-			Abstract:  model.Body,
+			Title:     truncateText(model.Head, 32),
+			Abstract:  truncateText(model.Body, 256),
 		})
 	}
 	err = tx.Create(&list).Error
