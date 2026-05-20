@@ -34,10 +34,11 @@ func FlagDB() { //数据库迁移
 		&models.MarkdownMsg{},
 		&models.ChatMsg{},
 		&models.UserChatActionModel{},
-		&models.TextModel{},
+		&models.ArticleSearchModel{},
 		&models.UserTopArticleModel{},
 		&models.CommentDiggModel{},
 		&models.SessionModel{},
+		&models.ArticleSearchModel{},
 	)
 	if err != nil {
 		logrus.Errorf("数据库迁移失败 %s", err)

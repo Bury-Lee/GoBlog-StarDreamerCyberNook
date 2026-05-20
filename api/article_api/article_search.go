@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/olivere/elastic/v7"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // ArticleSearchRequest 搜索请求结构体，包含分页信息、标签和排序类型
@@ -55,23 +56,39 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 		return
 	}
 
-	//TODO:也许要考虑服务降级的问题?
-	// if global.ES == nil {//在这里写降级处理
-	// 	response.FailWithMsg("Elasticsearch服务未启动", c)
-	// 	return
-	// }
-
 	// 2. 根据请求的Type确定Elasticsearch排序字段
-	var sortMap = map[int8]string{
+	var esSortMap = map[int8]string{
 		0: "created_at",    // 最新发布：按创建时间排序
 		1: "_score",        // 猜你喜欢：按相关性评分排序
 		2: "comment_count", // 最多回复：按评论数排序
 		3: "digg_count",    // 最多点赞：按点赞数排序
 		4: "collect_count", // 最多收藏：按收藏数排序
 	}
-	sortKey, ok := sortMap[req.Type]
+	var dbSortMap = map[int8]string{
+		0: "created_at",    // 最新发布
+		1: "created_at",    // 降级时没有ES评分，按发布时间兜底
+		2: "comment_count", // 最多回复
+		3: "digg_count",    // 最多点赞
+		4: "collect_count", // 最多收藏
+	}
+	sortKey, ok := esSortMap[req.Type]
 	if !ok { // 如果传入的Type不在map中，则返回错误
 		response.FailWithMsg("搜索类型错误", c)
+		return
+	}
+	dbSortKey := dbSortMap[req.Type]
+
+	articleTopMap, topArticleIDList := getAdminTopArticleInfo()
+
+	// ES不可用时，使用数据库全文搜索表降级
+	if global.ES == nil {
+		list, count, err := articleSearchFallback(c, req, dbSortKey, articleTopMap)
+		if err != nil {
+			logrus.Errorf("降级搜索失败 %s", err)
+			response.FailWithMsg("查询失败", c)
+			return
+		}
+		response.OkWithList(list, count, c)
 		return
 	}
 
@@ -96,54 +113,35 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 	query.Must(elastic.NewTermQuery("status", int(models.StatusPublished)))
 
 	// 处理管理员置顶逻辑
-	var articleIDList []uint    // 用于存储最终要返回的文章ID列表
-	var userIDList []uint       // 存储所有管理员用户的ID
-	var topArticleIDList []uint // 存储被管理员置顶的文章ID
-
-	//TODO:这里两步查询还是有点低效，以后想想怎么优化吧
-	//TODO:这里也应该先去Redis查询置顶文章列表，没有再从数据库查询(预计管理员置顶文章不会太多的情况下)
-	//在管理员及其置顶的文章不会太多的情况下,也许可以把这些放Redis里,直接从Redis里取置顶文章列表.记得和top的CRUD函数同步更改
-	// 查询所有角色为管理员的用户ID
-	global.DB.Model(models.UserModel{}).Where("role = ?", enum.AdminRole).Select("id").Scan(&userIDList) //由于管理员的数量不会超过100人，所以这里可以直接查询所有管理员的ID
-	// 查询这些管理员置顶的文章ID
-	global.DB.Model(models.UserTopArticleModel{}).Where("user_id in ?", userIDList).Select("article_id").Scan(&topArticleIDList) // 查询所有管理员置顶的文章ID
-	var articleTopMap = map[uint]bool{}                                                                                          // 用于快速判断某ID是否为置顶文章
+	var articleIDList []uint // 用于存储最终要返回的文章ID列表
 	if len(topArticleIDList) > 0 {
 		var topArticleIDListAny []interface{}
 		for _, u := range topArticleIDList {
 			topArticleIDListAny = append(topArticleIDListAny, u)
-			articleTopMap[u] = true // 标记为置顶
 		}
 		// 只给命中的置顶文章加权，不绕过搜索条件
 		query.Should(elastic.NewTermsQuery("id", topArticleIDListAny...).Boost(10))
 	}
-	//TODO.END
 
 	// 如果是"猜你喜欢"（Type=1），则加入用户兴趣标签查询
 	if req.Type == 1 {
 		// 尝试从JWT Token中解析用户信息
-		claims, err := jwts.ParseTokenByGin(c)
-		if err == nil && claims != nil {
-			// 用户已登录
-			var user models.UserModel
-			// 读取用户兴趣标签
-			err = global.DB.Select("id", "like_tags").Take(&user, claims.UserID).Error
-			if err != nil {
-				response.FailWithMsg("用户信息不存在", c)
-				return
+		likeTags, err := getCurrentUserLikeTags(c)
+		if err != nil {
+			response.FailWithMsg("用户信息不存在", c)
+			return
+		}
+		// 如果用户配置中有感兴趣的文章标签
+		if len(likeTags) > 0 {
+			tagQuery := elastic.NewBoolQuery()
+			var tagAnyList []interface{}
+			for _, tag := range likeTags {
+				tagAnyList = append(tagAnyList, tag)
 			}
-			// 如果用户配置中有感兴趣的文章标签
-			if len(user.LikeTags) > 0 {
-				tagQuery := elastic.NewBoolQuery()
-				var tagAnyList []interface{}
-				for _, tag := range user.LikeTags {
-					tagAnyList = append(tagAnyList, tag)
-				}
-				// 兴趣标签至少命中一个
-				tagQuery.Should(elastic.NewTermsQuery("tag_list", tagAnyList...)).
-					MinimumNumberShouldMatch(1)
-				query.Must(tagQuery)
-			}
+			// 兴趣标签至少命中一个
+			tagQuery.Should(elastic.NewTermsQuery("tag_list", tagAnyList...)).
+				MinimumNumberShouldMatch(1)
+			query.Must(tagQuery)
 		}
 	}
 
@@ -205,105 +203,232 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 		return
 	}
 
-	// 根据Elasticsearch返回的文章ID列表，从数据库查询完整的文章对象（包含关联的分类和用户信息）
-	//TODO:这里也应该先去Redis查询，没有再从数据库查询(注:这里没查到的文章页不应该放入Redis,查询率不一定代表点击率)
-
-	KeyList := []string{}
-	for _, id := range articleIDList {
-		idStr := strconv.FormatUint(uint64(id), 10)
-		KeyList = append(KeyList, "ArticleID"+idStr)
-	}
-
-	ctx := context.Background()
-	res, exit := global.RedisHotPool.MGet(ctx, KeyList...).Result()
-
-	var list = make([]ArticleSearchListResponse, 0)
-	var cacheMissIDList []uint                                 // 缓存未命中的文章ID
-	var cacheHitMap = make(map[uint]ArticleSearchListResponse) // 缓存命中的文章数据
-
-	if exit == nil { //查询成功
-		// 处理缓存命中结果
-		for i, cacheData := range res {
-			if cacheData != nil {
-				// 缓存命中
-				var cached ArticleDetailResponse
-				err := json.Unmarshal([]byte(cacheData.(string)), &cached)
-				if err != nil {
-					logrus.Warnf("缓存数据解析错误: %s", err)
-					// 解析失败时，将文章ID加入未命中列表，后续从数据库查询
-					cacheMissIDList = append(cacheMissIDList, articleIDList[i])
-					continue
-				}
-
-				// 组装缓存数据为搜索结果格式
-				item := ArticleSearchListResponse{
-					ArticleModel:  cached.ArticleModel,
-					AdminTop:      articleTopMap[cached.ID], // 设置是否置顶
-					CategoryTitle: cached.CategoryTitle,     // 复用详情缓存中的分类标题
-					UserNickname:  cached.NickName,          // 设置用户名
-					UserAvatar:    cached.UserAvatar,        // 设置用户头像
-				}
-
-				// 使用ES返回的高亮标题和摘要覆盖缓存中的内容
-				if art, ok := searchArticleMap[cached.ID]; ok {
-					item.Title = art.Title
-					item.Abstract = art.Abstract
-				}
-
-				cacheHitMap[cached.ID] = item
-			} else {
-				// 缓存未命中
-				cacheMissIDList = append(cacheMissIDList, articleIDList[i])
-			}
-		}
-	} else {
-		// Redis查询失败，所有文章ID都从未命中列表处理
-		cacheMissIDList = articleIDList
-	}
-
-	// 如果有缓存未命中的文章，从数据库查询
-	if len(cacheMissIDList) > 0 {
-		where := global.DB.Where("id in ?", cacheMissIDList)
-		_list, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
-			Where:        where,
-			Preloads:     []string{"CategoryModel", "UserModel"},    // 预加载分类和用户信息
-			DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList), // 按照cacheMissIDList的顺序进行排序
-		})
-		if err != nil {
-			logrus.Errorf("查询文章详情失败 %s", err)
-			response.FailWithMsg("查询失败", c)
-			return
-		}
-
-		// 将数据库查询的完整信息与ES返回的高亮信息合并
-		for _, model := range _list {
-			item := ArticleSearchListResponse{
-				ArticleModel: model,
-				AdminTop:     articleTopMap[model.ID],  // 设置是否置顶
-				UserNickname: model.UserModel.NickName, // 设置用户名
-				UserAvatar:   model.UserModel.Avatar,   // 设置用户头像
-			}
-			// 设置分类标题（如果存在）
-			if model.CategoryModel != nil {
-				item.CategoryTitle = &model.CategoryModel.Title
-			}
-			// 使用ES返回的高亮标题和摘要覆盖数据库中的原始内容
-			if art, ok := searchArticleMap[model.ID]; ok {
-				item.Title = art.Title
-				item.Abstract = art.Abstract
-			}
-			cacheHitMap[model.ID] = item // 存入map，便于后续排序
-		}
-	}
-
-	// 按照原始文章ID列表的顺序组装最终结果
-	for _, id := range articleIDList {
-		if item, ok := cacheHitMap[id]; ok {
-			list = append(list, item)
-		}
+	list, err := getArticleSearchList(articleIDList, articleTopMap, searchArticleMap)
+	if err != nil {
+		logrus.Errorf("查询文章详情失败 %s", err)
+		response.FailWithMsg("查询失败", c)
+		return
 	}
 
 	//TODO:以后加入带点赞数和评论数的响应字段
 	// 返回成功响应，包含文章列表和总数
 	response.OkWithList(list, int(count), c)
+}
+
+// getAdminTopArticleInfo 获取管理员置顶文章信息
+// 返回:articleTopMap - 置顶文章映射
+// 返回:topArticleIDList - 置顶文章ID列表
+// 说明:先查管理员ID，再查管理员置顶文章
+func getAdminTopArticleInfo() (articleTopMap map[uint]bool, topArticleIDList []uint) {
+	var userIDList []uint
+	articleTopMap = map[uint]bool{}
+
+	global.DB.Model(models.UserModel{}).Where("role = ?", enum.AdminRole).Select("id").Scan(&userIDList)
+	if len(userIDList) == 0 {
+		return articleTopMap, topArticleIDList
+	}
+
+	global.DB.Model(models.UserTopArticleModel{}).Where("user_id in ?", userIDList).Select("article_id").Scan(&topArticleIDList)
+	for _, articleID := range topArticleIDList {
+		articleTopMap[articleID] = true
+	}
+	return articleTopMap, topArticleIDList
+}
+
+// getCurrentUserLikeTags 获取当前用户兴趣标签
+// 参数:c - gin上下文
+// 返回:likeTags - 兴趣标签列表
+// 返回:err - 错误信息
+// 说明:未登录返回空切片，已登录时读取用户like_tags
+func getCurrentUserLikeTags(c *gin.Context) (likeTags []string, err error) {
+	claims, err := jwts.ParseTokenByGin(c)
+	if err != nil || claims == nil {
+		return nil, nil
+	}
+
+	var user models.UserModel
+	err = global.DB.Select("id", "like_tags").Take(&user, claims.UserID).Error
+	if err != nil {
+		return nil, err
+	}
+	return user.LikeTags, nil
+}
+
+// buildJSONTagLikeQuery 构建JSON标签模糊查询
+// 参数:column - 标签字段名
+// 参数:tags - 标签列表
+// 返回:query - GORM查询条件
+// 说明:JSON序列化后按带引号的标签匹配，避免子串误匹配
+func buildJSONTagLikeQuery(column string, tags []string) *gorm.DB {
+	query := global.DB.Session(&gorm.Session{NewDB: true})
+	for index, tag := range tags {
+		likeValue := "%\"" + tag + "\"%"
+		if index == 0 {
+			query = query.Where(column+" LIKE ?", likeValue)
+			continue
+		}
+		query = query.Or(column+" LIKE ?", likeValue)
+	}
+	return query
+}
+
+// articleSearchFallback 降级搜索文章
+// 参数:c - gin上下文
+// 参数:req - 搜索请求
+// 参数:sortKey - 排序字段
+// 参数:articleTopMap - 置顶文章映射
+// 返回:list - 搜索结果列表
+// 返回:count - 总数
+// 返回:err - 错误信息
+// 说明:用ArticleSearchModel定位文章ID，优先读Redis，未命中再查数据库
+func articleSearchFallback(c *gin.Context, req ArticleSearchRequest, sortKey string, articleTopMap map[uint]bool) (list []ArticleSearchListResponse, count int, err error) {
+	query := global.DB.Model(&models.ArticleModel{}).Where("status = ?", models.StatusPublished)
+
+	if req.Key != "" {
+		likeValue := "%" + req.Key + "%"
+		subQuery := global.DB.Model(&models.ArticleSearchModel{}).
+			Select("DISTINCT article_id").
+			Where(global.DB.Where("title LIKE ?", likeValue).Or("abstract LIKE ?", likeValue))
+		query = query.Where("id IN (?)", subQuery)
+	}
+
+	if req.Tag != "" {
+		query = query.Where("tag_list LIKE ?", "%\""+req.Tag+"\"%")
+	}
+
+	if req.Type == 1 {
+		likeTags, likeErr := getCurrentUserLikeTags(c)
+		if likeErr != nil {
+			return nil, 0, likeErr
+		}
+		if len(likeTags) > 0 {
+			query = query.Where(buildJSONTagLikeQuery("tag_list", likeTags))
+		}
+	}
+
+	var total int64
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []ArticleSearchListResponse{}, 0, nil
+	}
+
+	var articleBaseList []ArticleBaseInfo
+	err = query.Select("id", "title", "abstract").
+		Order(sortKey + " DESC").
+		Order("id DESC").
+		Offset(req.GetOffset()).
+		Limit(req.GetLimit()).
+		Find(&articleBaseList).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(articleBaseList) == 0 {
+		return []ArticleSearchListResponse{}, int(total), nil
+	}
+
+	var articleIDList []uint
+	searchArticleMap := map[uint]ArticleBaseInfo{}
+	for _, article := range articleBaseList {
+		articleIDList = append(articleIDList, article.ID)
+		searchArticleMap[article.ID] = article
+	}
+
+	list, err = getArticleSearchList(articleIDList, articleTopMap, searchArticleMap)
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, int(total), nil
+}
+
+// getArticleSearchList 获取搜索结果详情
+// 参数:articleIDList - 文章ID列表
+// 参数:articleTopMap - 置顶文章映射
+// 参数:searchArticleMap - 搜索命中的标题摘要映射
+// 返回:list - 搜索结果列表
+// 返回:err - 错误信息
+// 说明:优先从Redis读取文章详情，未命中再查询数据库，并按原始顺序组装
+func getArticleSearchList(articleIDList []uint, articleTopMap map[uint]bool, searchArticleMap map[uint]ArticleBaseInfo) (list []ArticleSearchListResponse, err error) {
+	keyList := []string{}
+	for _, id := range articleIDList {
+		idStr := strconv.FormatUint(uint64(id), 10)
+		keyList = append(keyList, "ArticleID"+idStr)
+	}
+
+	ctx := context.Background()
+	res, cacheErr := global.RedisHotPool.MGet(ctx, keyList...).Result()
+
+	var cacheMissIDList []uint
+	cacheHitMap := make(map[uint]ArticleSearchListResponse)
+
+	if cacheErr == nil {
+		for index, cacheData := range res {
+			if cacheData == nil {
+				cacheMissIDList = append(cacheMissIDList, articleIDList[index])
+				continue
+			}
+
+			var cached ArticleDetailResponse
+			err = json.Unmarshal([]byte(cacheData.(string)), &cached)
+			if err != nil {
+				logrus.Warnf("缓存数据解析错误: %s", err)
+				cacheMissIDList = append(cacheMissIDList, articleIDList[index])
+				continue
+			}
+
+			item := ArticleSearchListResponse{
+				ArticleModel:  cached.ArticleModel,
+				AdminTop:      articleTopMap[cached.ID],
+				CategoryTitle: cached.CategoryTitle,
+				UserNickname:  cached.NickName,
+				UserAvatar:    cached.UserAvatar,
+			}
+			if article, ok := searchArticleMap[cached.ID]; ok {
+				item.Title = article.Title
+				item.Abstract = article.Abstract
+			}
+			cacheHitMap[cached.ID] = item
+		}
+	} else {
+		cacheMissIDList = articleIDList
+	}
+
+	if len(cacheMissIDList) > 0 {
+		where := global.DB.Where("id in ?", cacheMissIDList)
+		modelList, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
+			Where:        where,
+			Preloads:     []string{"CategoryModel", "UserModel"},
+			DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, model := range modelList {
+			item := ArticleSearchListResponse{
+				ArticleModel: model,
+				AdminTop:     articleTopMap[model.ID],
+				UserNickname: model.UserModel.NickName,
+				UserAvatar:   model.UserModel.Avatar,
+			}
+			if model.CategoryModel != nil {
+				item.CategoryTitle = &model.CategoryModel.Title
+			}
+			if article, ok := searchArticleMap[model.ID]; ok {
+				item.Title = article.Title
+				item.Abstract = article.Abstract
+			}
+			cacheHitMap[model.ID] = item
+		}
+	}
+
+	list = make([]ArticleSearchListResponse, 0, len(articleIDList))
+	for _, id := range articleIDList {
+		if item, ok := cacheHitMap[id]; ok {
+			list = append(list, item)
+		}
+	}
+	return list, nil
 }

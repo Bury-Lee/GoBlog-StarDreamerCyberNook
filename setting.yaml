@@ -72,6 +72,7 @@ redisDynamic:
 
 # Elasticsearch搜索引擎配置
 es:
+  enabled:              # 是否启用ES功能
   url:     # ES服务地址
   username:              # ES用户名
   password:                   # ES密码

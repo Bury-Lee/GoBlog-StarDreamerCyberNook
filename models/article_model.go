@@ -4,7 +4,7 @@
 package models
 
 import (
-	"StarDreamerCyberNook/global"
+	"StarDreamerCyberNook/utils/MDtransform"
 	"database/sql/driver"
 	_ "embed"
 	"errors"
@@ -27,20 +27,11 @@ func (this *TagList) Scan(value any) error {
 }
 
 func (this TagList) Value() (driver.Value, error) {
-	return strings.Join(this, "."), nil
-}
-
-// 预备模型:全文搜索模型
-type TextModel struct {
-	Model
-	ArticleID uint   `json:"articleID"`
-	Head      string `json:"head"`
-	Body      string `json:"body"`
+	return strings.Join(this, ","), nil
 }
 
 // ArticleModel 文章模型
 // 用于存储博客系统的文章信息，包含标题、内容、分类、标签、统计等字段
-// TODO:文章的审核通过Python微服务移交给AI的api来处理，不想人工审核了，太麻烦了
 type ArticleModel struct {
 	Model
 	Title         string         `gorm:"size:32" json:"title"`                     // 文章标题，最大32字符
@@ -98,69 +89,100 @@ func (ArticleModel) Index() string {
 	return "article_index" //返回文章模型的索引名
 }
 
-//以下用于ES服务降级,当ES无法使用时,将使用数据库存储全文搜索记录
-// func (a *ArticleModel) AfterCreate(tx *gorm.DB) (err error) { //
-// 	// 创建文章之后的钩子函数
-// 	// 只有发布中的文章会放到全文搜索里面去
-// 	if a.Status != StatusPublished {
-// 		return nil
-// 	}
-// 	textList := MDtransform.MdContentTransformation(a.Title, a.Content, a.ID)
-// 	var list []TextModel
-// 	for _, model := range textList {
-// 		list = append(list, TextModel{
-// 			ArticleID: model.ArticleID,
-// 			Head:      model.Head,
-// 			Body:      model.Body,
-// 		})
-// 	}
-// 	err = tx.Create(&list).Error
-// 	if err != nil {
-// 		logrus.Error(err)
-// 		return nil
-// 	}
-// 	return nil
-// }
+// ArticleSearchModel 没有ES时的搜索降级搜索模型
+// TODO
+type ArticleSearchModel struct {
+	Model
+	ArticleID uint         `json:"articleID"`                                         // 外键关联文章ID
+	Article   ArticleModel `gorm:"foreignKey:ArticleID" json:"-"`                     //预备字段
+	Title     string       `gorm:"size:32;index:idx_titleSearch" json:"title"`        // 文章标题，加索引
+	Abstract  string       `gorm:"size:256;index:idx_abstractSearch" json:"abstract"` // 文章摘要，加索引
+}
 
-// func (a *ArticleModel) AfterDelete(tx *gorm.DB) (err error) {
-// 	// 删除之后
-// 	var textList []TextModel
-// 	tx.Find(&textList, "article_id = ?", a.ID)
-// 	if len(textList) > 0 {
-// 		logrus.Infof("删除全文记录 %d", len(textList))
-// 		tx.Delete(&textList)
-// 	}
-// 	return nil
-// }
+//文章创建时自动创建,并更新全文搜索记录
+// 文章更新时,也会更新全文搜索记录
+//删除时也会删除全文搜索记录
 
-// func (a *ArticleModel) AfterUpdate(tx *gorm.DB) (err error) {
-// 	// 正文发生了变化，才去做转换
-// 	a.AfterDelete(tx)
-// 	a.AfterCreate(tx)
-// 	return nil
-// }
+// 以下用于ES服务降级,当ES无法使用时,将使用数据库存储全文搜索记录
 
-func (a *ArticleModel) BeforeDelete(tx *gorm.DB) (err error) { //钩子函数,在删除文章前,先删除关联的评论,点赞,收藏,置顶,浏览记录
+// AfterCreate 文章创建后写入全文搜索记录
+// 参数:tx - GORM事务对象
+// 返回:err - 错误信息
+// 说明:仅发布状态的文章会被提取正文并保存到ArticleSearch中，用于降级搜索
+func (this *ArticleModel) AfterCreate(tx *gorm.DB) (err error) {
+	if this.Status != StatusPublished {
+		return nil
+	}
+	textList := MDtransform.MdContentTransformation(this.Title, this.Content, this.ID)
+	var list []ArticleSearchModel
+	for _, model := range textList {
+		list = append(list, ArticleSearchModel{
+			ArticleID: this.ID,
+			Title:     model.Head,
+			Abstract:  model.Body,
+		})
+	}
+	err = tx.Create(&list).Error
+	if err != nil {
+		logrus.Error(err)
+		return err
+	}
+	return nil
+}
+
+// AfterDelete 文章删除后清理全文搜索记录
+// 参数:tx - GORM事务对象
+// 返回:err - 错误信息
+// 说明:根据文章ID查找并删除相关的全文搜索记录
+func (this *ArticleModel) AfterDelete(tx *gorm.DB) (err error) {
+	var textList []ArticleSearchModel
+	tx.Find(&textList, "article_id = ?", this.ID)
+	if len(textList) > 0 {
+		if err = tx.Delete(&textList).Error; err != nil {
+			logrus.Error("删除全文搜索记录失败: ", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// AfterUpdate 文章更新后刷新全文搜索记录
+// 参数:tx - GORM事务对象
+// 返回:err - 错误信息
+// 说明:先删除旧的全文记录，再根据当前内容重新生成全文搜索记录
+func (this *ArticleModel) AfterUpdate(tx *gorm.DB) (err error) {
+	err = this.AfterDelete(tx)
+	if err != nil {
+		return err
+	}
+	return this.AfterCreate(tx)
+}
+
+// BeforeDelete 删除文章前清理关联数据
+// 参数:tx - GORM事务对象
+// 返回:err - 错误信息
+// 说明:删除文章前，级联删除评论、点赞、收藏、置顶、浏览等关联记录
+func (this *ArticleModel) BeforeDelete(tx *gorm.DB) (err error) {
 	// 评论
 	var commentList []CommentModel
-	global.DB.Find(&commentList, "article_id = ?", a.ID).Delete(&commentList)
+	tx.Find(&commentList, "article_id = ?", this.ID).Delete(&commentList)
 	// 点赞
 	var diggList []ArticleDiggModel
-	global.DB.Find(&diggList, "article_id = ?", a.ID).Delete(&diggList)
+	tx.Find(&diggList, "article_id = ?", this.ID).Delete(&diggList)
 	// 收藏
 	var collectList []UserArticleCollectModel
-	global.DB.Find(&collectList, "article_id = ?", a.ID).Delete(&collectList)
+	tx.Find(&collectList, "article_id = ?", this.ID).Delete(&collectList)
 	// 置顶
 	var topList []UserTopArticleModel
-	global.DB.Find(&topList, "article_id = ?", a.ID).Delete(&topList)
+	tx.Find(&topList, "article_id = ?", this.ID).Delete(&topList)
 	// 浏览
 	var lookList []UserArticleHistoryModel
-	global.DB.Find(&lookList, "article_id = ?", a.ID).Delete(&lookList)
+	tx.Find(&lookList, "article_id = ?", this.ID).Delete(&lookList)
 
 	logrus.Infof("删除关联评论 %d 条", len(commentList))
 	logrus.Infof("删除关联点赞 %d 条", len(diggList))
 	logrus.Infof("删除关联收藏 %d 条", len(collectList))
 	logrus.Infof("删除关联置顶 %d 条", len(topList))
 	logrus.Infof("删除关联浏览 %d 条", len(lookList))
-	return
+	return nil
 }

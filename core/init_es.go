@@ -11,8 +11,12 @@ import (
 
 func InitElasticSearch() *elastic.Client { //TODO:升级到v8
 	es := global.Config.ES
+	if !es.Enabled {
+		logrus.Info("es功能未启用,启用降级服务")
+		return nil
+	}
 	if es.Url == "" {
-		logrus.Errorf("你es忘记填写地址了")
+		logrus.Errorf("es忘记填写地址了")
 		return nil
 	}
 	var client *elastic.Client
