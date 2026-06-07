@@ -19,12 +19,11 @@ func InitRouter() *gin.Engine {
 
 	r.Static("/web", "static") //静态文件目录,注册个路由到时候写网页?而且还可以用于获取图片//TODO:后期把这个路径移到配置里,不要写死在代码里
 
-	// nr := r.Group("/api")
-
 	nr := r.Group("/api") //TODO:测试使用无前缀api,开发完成了要给app组加上/api的前缀,nr := r.Group("/api")这样
 
 	if global.Config.System.RunMode == "debug" {
 		nr.Use(middleware.RequestLogMiddleware)
+		// Debug模式下后端应该允许所有来源或特定来源
 		nr.Use(middleware.CORS)
 		TestRouter(nr)
 	}

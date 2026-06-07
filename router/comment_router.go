@@ -14,4 +14,5 @@ func CommentRouter(r *gin.RouterGroup) {
 	r.GET("/comment", app.CommentListlView)                                    //已测试
 	r.GET("/commentChild", app.CommentChildListView)                           //已测试
 	r.POST("/comment/digg/:id", middleware.AuthMiddleware, app.CommentDiggView)
+	r.POST("/comment/at/:id", middleware.AuthMiddleware, app.AtOther)
 }
