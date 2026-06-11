@@ -1,5 +1,6 @@
 # GoBlog（StarDreamerCyberNook）
 
+> 대응 프론트엔드 저장소: `https://github.com/azurekiln2333/azurekiln-goblog-web`
 `Gin + GORM + Redis + Elasticsearch`를 기반으로 하는 블로그/커뮤니티 백엔드 프로젝트로, 사용자, 게시물, 댓글, 메시지, 팔로우, 채팅, 사이트 설정 등의 모듈을 포함합니다.
 
 ## 🌐 다국어 문서

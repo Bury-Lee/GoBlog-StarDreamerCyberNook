@@ -1,5 +1,6 @@
 # GoBlog（StarDreamerCyberNook）
 
+> 对应前端仓库：`https://github.com/azurekiln2333/azurekiln-goblog-web`
 一个基于 `Gin + GORM + Redis + Elasticsearch` 的博客/社区后端项目，包含用户、文章、评论、消息、关注、聊天、站点配置等模块。
 
 ## 🌐 多语言文档

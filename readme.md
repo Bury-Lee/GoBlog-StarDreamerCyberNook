@@ -1,5 +1,6 @@
 # GoBlog (StarDreamerCyberNook)
 
+> Corresponding frontend repository: `https://github.com/azurekiln2333/azurekiln-goblog-web`
 A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, featuring modules for users, articles, comments, messages, follows, chat, and site configuration.
 
 ## 🌐 Multilingual Documentation
