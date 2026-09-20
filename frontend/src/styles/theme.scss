@@ -1,0 +1,85 @@
+@use './variables.scss' as v;
+
+:root {
+  --sd-bg-deep: #{v.$sd-bg-deep};
+  --sd-bg: #{v.$sd-bg};
+  --sd-panel: #{v.$sd-panel};
+  --sd-panel-2: #{v.$sd-panel-2};
+  --sd-border: #{v.$sd-border};
+  --sd-border-strong: #{v.$sd-border-strong};
+  --sd-text: #{v.$sd-text};
+  --sd-text-muted: #{v.$sd-text-muted};
+  --sd-text-dim: #{v.$sd-text-dim};
+  --sd-cyan: #{v.$sd-cyan};
+  --sd-indigo: #{v.$sd-indigo};
+  --sd-purple: #{v.$sd-purple};
+  --sd-pink: #{v.$sd-pink};
+  --sd-green: #{v.$sd-green};
+  --sd-amber: #{v.$sd-amber};
+  --sd-red: #{v.$sd-red};
+  --sd-radius: #{v.$sd-radius};
+  --sd-radius-sm: #{v.$sd-radius-sm};
+  --sd-shadow: #{v.$sd-shadow};
+  --sd-font-mono: #{v.$sd-font-mono};
+  --sd-max-width: #{v.$sd-max-width};
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --el-color-primary: #{v.$sd-cyan};
+  --el-color-primary-light-3: #1cb3cd;
+  --el-color-primary-light-5: #1791a8;
+  --el-color-primary-light-7: #10667a;
+  --el-color-primary-light-8: #0d4d5c;
+  --el-color-primary-light-9: #0a3440;
+  --el-color-primary-dark-2: #5ee0f2;
+
+  --el-color-success: #{v.$sd-green};
+  --el-color-success-light-9: rgba(52, 211, 153, 0.12);
+  --el-color-warning: #{v.$sd-amber};
+  --el-color-warning-light-9: rgba(251, 191, 36, 0.12);
+  --el-color-danger: #{v.$sd-red};
+  --el-color-danger-light-9: rgba(248, 113, 113, 0.12);
+  --el-color-error: #{v.$sd-red};
+  --el-color-info: #{v.$sd-text-muted};
+  --el-color-info-light-9: rgba(148, 163, 184, 0.12);
+
+  --el-bg-color: #{v.$sd-panel};
+  --el-bg-color-page: #{v.$sd-bg-deep};
+  --el-bg-color-overlay: #{v.$sd-panel-2};
+  --el-fill-color: rgba(30, 43, 69, 0.55);
+  --el-fill-color-light: rgba(30, 43, 69, 0.4);
+  --el-fill-color-lighter: rgba(30, 43, 69, 0.25);
+  --el-fill-color-extra-light: rgba(30, 43, 69, 0.16);
+  --el-fill-color-dark: rgba(30, 43, 69, 0.7);
+  --el-fill-color-darker: rgba(30, 43, 69, 0.85);
+  --el-fill-color-blank: #{v.$sd-panel};
+
+  --el-text-color-primary: #{v.$sd-text};
+  --el-text-color-regular: #c7d2e3;
+  --el-text-color-secondary: #{v.$sd-text-muted};
+  --el-text-color-placeholder: #{v.$sd-text-dim};
+  --el-text-color-disabled: #4b5a72;
+
+  --el-border-color: #{v.$sd-border};
+  --el-border-color-light: #{v.$sd-border};
+  --el-border-color-lighter: #1a2438;
+  --el-border-color-extra-light: #151d2e;
+  --el-border-color-dark: #{v.$sd-border-strong};
+  --el-border-color-darker: #35496f;
+
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-mask-color: rgba(7, 11, 20, 0.75);
+  --el-mask-color-extra-light: rgba(7, 11, 20, 0.4);
+
+  --el-box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.85);
+  --el-box-shadow-light: 0 8px 24px -14px rgba(0, 0, 0, 0.8);
+  --el-box-shadow-lighter: 0 6px 18px -12px rgba(0, 0, 0, 0.7);
+  --el-box-shadow-dark: 0 16px 40px -16px rgba(0, 0, 0, 0.9);
+
+  --el-disabled-bg-color: rgba(30, 43, 69, 0.4);
+  --el-disabled-text-color: #4b5a72;
+  --el-disabled-border-color: #1a2438;
+}
