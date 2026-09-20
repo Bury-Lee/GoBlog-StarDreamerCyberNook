@@ -1,6 +1,6 @@
 # GoBlog（StarDreamerCyberNook）
 
-> 对应前端仓库：`https://github.com/azurekiln2333/azurekiln-goblog-web`
+> 🖥️ **内置前端**：本仓库已在 [`frontend/`](../frontend/) 目录内置 Vue 3 + TypeScript 前端（用户站 + 管理后台），原有外部前端仓库为 `https://github.com/azurekiln2333/azurekiln-goblog-web`。
 一个基于 `Gin + GORM + Redis + Elasticsearch` 的博客/社区后端项目，包含用户、文章、评论、消息、关注、聊天、站点配置等模块。
 
 ## 🌐 多语言文档
@@ -22,6 +22,7 @@
 - **AI 已接入业务**：支持站点 AI 助手，以及文章、评论、昵称等内容审核
 - **多模型 AI 接入**：现已支持多种 AI（支持 OpenAI 接口的模型），加入 AI 文章摘要功能和 AI 文章评级功能，调试模式下输出 AI 回复内容的功能
 - **运营能力齐全**：支持站点配置、SEO、轮播图、友情链接、推广位和日志管理
+- **内置前端**：`frontend/` 内提供 Vue 3 + TypeScript + Vite + Pinia + Element Plus 前端，覆盖用户站与管理后台，赛博暗色主题
 
 > 📖 **功能文档**：[博客功能文档](功能文档.md)
 
@@ -40,9 +41,85 @@ go-blog
 ├─ conf/                # 配置结构体
 ├─ flags/               # 命令行参数（迁移、建索引、建用户）
 ├─ init/                # 本地依赖服务 docker-compose 与基础配置
+├─ frontend/            # 内置 Vue 3 + TypeScript 前端（用户站 + 管理后台）
 ├─ setting.yaml         # 主配置文件
 └─ main.go              # 入口
 ```
+
+## 🖥️ 内置前端（Vue 3 + TypeScript）
+
+完整前端位于 [`frontend/`](../frontend/) 目录，同时覆盖用户站与管理后台，复用同一套 `/api` 接口与 `token` / `refreshToken` 鉴权流程。
+
+### 技术栈
+
+| 分层     | 选型                                                        |
+| ------ | --------------------------------------------------------- |
+| 框架     | Vue 3（`<script setup>`）+ TypeScript                        |
+| 构建     | Vite 6                                                    |
+| 状态 / 路由 | Pinia + Vue Router 4（登录与管理员路由守卫）                           |
+| UI     | Element Plus + 自定义赛博暗色主题                                   |
+| 请求     | Axios（自动携带 `token`、401 自动刷新令牌并重放请求、统一错误提示）                  |
+| 内容     | Markdown 编辑器（实时预览），`marked` + `DOMPurify` 过滤             |
+
+### 功能覆盖
+
+- **用户站**：首页（轮播图、按 `site.indexRight` 配置渲染的侧栏组件）、文章列表 / 详情（目录、阅读进度、点赞、收藏、多级评论）、搜索（高亮 + 多维排序）、Markdown / HTML 双模编辑器（图片上传）、个人主页与设置（隐私、通知、邮箱重置）、收藏夹、浏览记录、消息中心（7 类）、私聊、AI 助手、关于页
+- **管理后台**：仪表盘、文章审核、文章 / 分类 / 用户管理、轮播图、友情链接、友站推广、图库、日志管理、站点配置查看（邮件 / QQ / AI，敏感字段打码）
+
+### 快速启动
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173，/api 与 /web 自动代理到 127.0.0.1:8080
+npm run build    # 产物目录：frontend/dist
+```
+
+| 环境变量                  | 默认值                      | 说明           |
+| --------------------- | ------------------------ | ------------ |
+| `VITE_API_BASE`       | `/api`                   | 前端使用的接口前缀    |
+| `VITE_PROXY_TARGET`   | `http://127.0.0.1:8080`  | dev server 代理的后端地址 |
+
+> 💡 请保持 `system.cors_origins` 中包含 `http://localhost:5173` 与 `http://127.0.0.1:5173`（CORS 仅在 `debug` 模式注册）。
+
+### 本地快速跑通（SQLite + Docker Redis + LM Studio）
+
+无需 MySQL / Elasticsearch 也能完整运行：
+
+```yaml
+es:
+  enabled: false            # 降级为数据库搜索表
+dbWrite:
+  - db_name: data/goblog.db # 相对路径，基于运行目录解析
+    sql_name: sqlite        # 纯 Go 驱动，无需 CGO
+objectStorage:
+  enable: false             # 图片存本地 ./images，不依赖 RustFS
+ai:
+  enable: true
+  chat_enable: true
+  host: http://127.0.0.1:1234/v1   # LM Studio 的 OpenAI 兼容地址
+```
+
+```bash
+# 1. 启动依赖服务
+docker compose -f init/Redis/docker-compose.yml up -d
+
+# 2. 在 setting.yaml 所在目录运行，并确保同目录存在
+#    init/ip2region.xdb、images/、static/
+./main_windows_amd64.exe -db       # 迁移数据库
+./main_windows_amd64.exe -search   # 重建降级搜索表
+./main_windows_amd64.exe           # 启动服务
+```
+
+### 前端对后端现状的降级处理
+
+| 后端现状                                        | 前端行为                     |
+| ------------------------------------------- | ------------------------ |
+| `router/enter.go` 未注册关注 / 粉丝路由              | 关注按钮给出明确提示，不阻断页面         |
+| `PUT /api/site/:name` 处于注释状态                | 站点配置页只读                  |
+| `PUT /api/user/updatePassword` 未注册          | 不渲染修改密码入口                |
+
+> ℹ️ 文章状态与审核语义以**源码**为准（与 `docs/前端API文档.md` 部分描述不一致）：`0=草稿, 1=审核中, 2=已发布, 3=已下线`；审核 `status=2` 通过、`0` 驳回；子评论使用 `root` 参数查询。
 
 ## 🔧 环境要求
 
@@ -360,6 +437,7 @@ go run main.go -t user -s create
 | **ES 启动失败**      | 确认 `http://127.0.0.1:9200` 可访问，账号密码匹配                    |
 | **Redis 警告淘汰策略** | 项目会检查动态 Redis 的 `maxmemory-policy`                       |
 | **接口 404**       | 注意当前接口带 `/api` 前缀，应访问 `/api/user/login` 这类路径             |
+| **前端代理报 `ECONNREFUSED 127.0.0.1:8080`** | 后端未启动，或在没有 `setting.yaml` 的目录下启动。请在配置文件所在目录运行可执行文件 |
 
 ## 💡 仅开发者提示
 

@@ -1,6 +1,6 @@
 # GoBlog (StarDreamerCyberNook)
 
-> Corresponding frontend repository: `https://github.com/azurekiln2333/azurekiln-goblog-web`
+> 🖥️ **Built-in frontend**: this repository now ships a Vue 3 + TypeScript frontend under [`frontend/`](frontend/) (public site + admin console). The legacy external frontend repository is `https://github.com/azurekiln2333/azurekiln-goblog-web`.
 A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, featuring modules for users, articles, comments, messages, follows, chat, and site configuration.
 
 ## 🌐 Multilingual Documentation
@@ -24,6 +24,7 @@ A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, 
 - **AI Integration**: Site AI assistant and content moderation for articles, comments, and nicknames
 - **Multi-model AI Support**: Now supports multiple AIs (OpenAI interface compatible), added AI article summary and AI article rating features, and supports outputting AI responses in debug mode
 - **Complete Operations Features**: Site configuration, SEO, banners, friend links, promotion slots, and log management
+- **Built-in Frontend**: Vue 3 + TypeScript + Vite + Pinia + Element Plus frontend covering both the public site and the admin console, with a cyber dark theme
 
 > 📖 **Feature Documentation**: [Blog Feature Documentation](docs/功能文档.md)
 
@@ -43,9 +44,85 @@ go-blog
 ├─ flags/               # Command line arguments (migration, index creation, user creation)
 ├─ init/                # Local dependency services docker-compose and basic configuration
 ├─ build/               # Cross-platform build scripts (build.sh / build.bat)
+├─ frontend/            # Built-in Vue 3 + TypeScript frontend (public site + admin console)
 ├─ setting.yaml         # Main configuration file
 └─ main.go              # Entry point
 ```
+
+## 🖥️ Built-in Frontend (Vue 3 + TypeScript)
+
+A complete frontend lives in [`frontend/`](frontend/), covering the public site and the admin console. It talks to the same `/api` endpoints and reuses the `token` / `refreshToken` authentication flow.
+
+### Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Framework | Vue 3 (`<script setup>`) + TypeScript |
+| Build | Vite 6 |
+| State / Routing | Pinia + Vue Router 4 (auth & admin route guards) |
+| UI | Element Plus with a custom cyber dark theme |
+| HTTP | Axios (auto `token` header, refresh-token retry with request replay, unified error toast) |
+| Content | Markdown editor with live preview, `marked` + `DOMPurify` sanitising |
+
+### Feature Coverage
+
+- **Public site**: home (banner, configurable sidebar widgets driven by `site.indexRight`), article list / detail (TOC, reading progress, likes, collections, nested comments), search with highlight and multi-dimension sorting, Markdown / HTML editor with image upload, profile & settings (privacy, notifications, e-mail reset), collections, browsing history, message center (7 types), private chat, AI assistant, about page
+- **Admin console**: dashboard, article review, article / category / user management, banners, friend links, friend promotions, image library, logs, site configuration viewer (e-mail / QQ / AI, secrets masked)
+
+### Quick Start
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173, proxies /api and /web to 127.0.0.1:8080
+npm run build    # production output: frontend/dist
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE` | `/api` | API prefix used by the frontend |
+| `VITE_PROXY_TARGET` | `http://127.0.0.1:8080` | Backend address for the dev-server proxy |
+
+> 💡 Keep `http://localhost:5173` / `http://127.0.0.1:5173` in `system.cors_origins` — CORS is only registered in `debug` mode.
+
+### Local Quick Run (SQLite + Docker Redis + LM Studio)
+
+The backend can run fully offline without MySQL / Elasticsearch:
+
+```yaml
+es:
+  enabled: false            # fall back to the database search table
+dbWrite:
+  - db_name: data/goblog.db # relative path, resolved from the working directory
+    sql_name: sqlite        # pure-Go driver, no CGO required
+objectStorage:
+  enable: false             # store uploads in ./images instead of S3/RustFS
+ai:
+  enable: true
+  chat_enable: true
+  host: http://127.0.0.1:1234/v1   # LM Studio OpenAI-compatible endpoint
+```
+
+```bash
+# 1. dependency services
+docker compose -f init/Redis/docker-compose.yml up -d
+
+# 2. run from the directory that contains setting.yaml, and make sure
+#    init/ip2region.xdb, images/ and static/ exist next to it
+./main_windows_amd64.exe -db       # migrate the database
+./main_windows_amd64.exe -search   # rebuild the fallback search table
+./main_windows_amd64.exe           # start the service
+```
+
+### Backend Gaps Handled by the UI
+
+| Backend status | Frontend behaviour |
+|----------------|--------------------|
+| Follow / follower routes are not registered in `router/enter.go` | Follow buttons degrade gracefully with a clear notice |
+| `PUT /api/site/:name` is commented out | Site configuration page is read-only |
+| `PUT /api/user/updatePassword` is not registered | No password-change entry is rendered |
+
+> ℹ️ Article status and review semantics follow the **source code** rather than `docs/前端API文档.md`: `0=draft, 1=pending, 2=published, 3=offline`; review `status=2` approves and `0` rejects; child comments are queried with the `root` parameter.
 
 ## 🔧 Environment Requirements
 
@@ -368,6 +445,7 @@ Based on this design, you can use `NGINX` reverse proxy and load balancing to sc
 | **ES startup failed** | Confirm `http://127.0.0.1:9200` is accessible and account password matches |
 | **Redis warning eviction policy** | Project will check dynamic Redis `maxmemory-policy` |
 | **Interface 404** | Note current interfaces have `/api` prefix, should access paths like `/api/user/login` |
+| **Frontend proxy `ECONNREFUSED 127.0.0.1:8080`** | The backend is not running, or it was started from a directory without `setting.yaml`. Start the binary from the folder that contains the configuration file |
 
 ## 💡 Developer Only Tips
 
