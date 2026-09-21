@@ -27,8 +27,12 @@ export function usePagination<T, P extends object = PageParams>(
         ...baseParams(),
         page: page.value,
         limit: limit.value,
-        key: key.value || undefined,
       } as P & PageParams
+      // 仅当调用方没有在 baseParams 里自带 key 时,才使用内部关键词,
+      // 否则会把搜索页等外部传入的 key 覆盖成空值(导致关键词发不到后端)
+      if (key.value) {
+        params.key = key.value
+      }
       const data = await fetcher(params)
       list.value = data?.list ?? []
       count.value = data?.count ?? 0

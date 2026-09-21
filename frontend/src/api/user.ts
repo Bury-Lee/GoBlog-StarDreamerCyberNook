@@ -1,4 +1,5 @@
 import { http } from './request'
+import { getRefreshToken } from '@/utils/storage'
 import type {
   AdminUserInfoUpdatePayload,
   CaptchaPayload,
@@ -39,8 +40,9 @@ export function logout(): Promise<unknown> {
   return http.delete<unknown>('/user/logout', undefined, { silent: true })
 }
 
-export function refreshToken(): Promise<string> {
-  return http.post<string>('/user/token')
+export function refreshToken(value?: string): Promise<string> {
+  const refresh = value || getRefreshToken()
+  return http.post<string>('/user/token', null, { headers: { refreshToken: refresh } })
 }
 
 export function fetchUserDetail(): Promise<UserDetail> {

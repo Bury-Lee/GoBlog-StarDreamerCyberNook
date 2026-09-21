@@ -1,7 +1,7 @@
 <template>
   <section class="tag-cloud sd-panel">
     <header class="sd-panel__header">
-      <span class="sd-panel__title">标签云</span>
+      <span class="sd-panel__title">{{ title }}</span>
       <el-button text size="small" @click="reload">
         <el-icon><Refresh /></el-icon>
       </el-button>
@@ -9,18 +9,12 @@
     <div class="sd-panel__body">
       <el-skeleton v-if="loading" :rows="3" animated />
       <EmptyState v-else-if="!tags.length" text="暂无标签" compact />
-      <div v-else class="tag-cloud__items">
-        <span
-          v-for="item in tags"
-          :key="item.name"
-          class="sd-tag"
-          :class="{ 'sd-tag--purple': item.count > 2 }"
-          @click="goTag(item.name)"
-        >
-          # {{ item.name }}
-          <em class="tag-cloud__count">{{ item.count }}</em>
-        </span>
-      </div>
+      <template v-else>
+        <div class="tag-cloud__items">
+          <span v-for="tag in tags" :key="tag" class="sd-tag" @click="goTag(tag)"># {{ tag }}</span>
+        </div>
+        <p class="sd-dim tag-cloud__hint">来自最近发布的文章</p>
+      </template>
     </div>
   </section>
 </template>
@@ -32,21 +26,19 @@ import { Refresh } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { fetchArticleList } from '@/api/article'
 
+withDefaults(defineProps<{ title?: string }>(), { title: '标签云' })
+
 const router = useRouter()
 const loading = ref(true)
 const rawTags = ref<string[]>([])
 
 const tags = computed(() => {
-  const map = new Map<string, number>()
+  const result: string[] = []
   rawTags.value.forEach((tag) => {
-    const key = String(tag || '').trim()
-    if (!key) return
-    map.set(key, (map.get(key) || 0) + 1)
+    const name = String(tag || '').trim()
+    if (name && !result.includes(name)) result.push(name)
   })
-  return Array.from(map.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 24)
+  return result.slice(0, 24)
 })
 
 function goTag(tag: string): void {
@@ -79,9 +71,8 @@ onMounted(reload)
   cursor: pointer;
 }
 
-.tag-cloud__count {
-  font-style: normal;
-  font-size: 11px;
-  opacity: 0.7;
+.tag-cloud__hint {
+  margin-top: 12px;
+  font-size: 12px;
 }
 </style>

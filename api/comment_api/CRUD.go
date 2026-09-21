@@ -235,6 +235,17 @@ func (CommentApi) CommentListlView(c *gin.Context) { //获取某文章的一级�
 
 		List[i].UserModel = UserModel
 	}
+	//叠加Redis里的点赞增量,否则点赞后要等10分钟定时任务回写才看得到变化
+	if len(List) > 0 {
+		ids := make([]uint, 0, len(List))
+		for _, v := range List {
+			ids = append(ids, v.ID)
+		}
+		diggMap := redis_count.GetAllCacheCommentDigg(ids)
+		for i := range List {
+			List[i].DiggCount += diggMap[List[i].ID]
+		}
+	}
 	response.OkWithList(List, count, c)
 }
 
@@ -300,6 +311,17 @@ func (CommentApi) CommentChildListView(c *gin.Context) { //可以这样,评论�
 
 		List[i].UserModel = UserModel
 	}
+	//叠加Redis里的点赞增量,否则点赞后要等10分钟定时任务回写才看得到变化
+	if len(List) > 0 {
+		ids := make([]uint, 0, len(List))
+		for _, v := range List {
+			ids = append(ids, v.ID)
+		}
+		diggMap := redis_count.GetAllCacheCommentDigg(ids)
+		for i := range List {
+			List[i].DiggCount += diggMap[List[i].ID]
+		}
+	}
 	response.OkWithList(List, count, c)
 }
 
@@ -334,24 +356,30 @@ func (CommentApi) CommentDeleteView(c *gin.Context) {
 
 	if comment.RootParentID == nil {
 		//一级评论,连带着二级评论一起删除
-		var count int64
-		global.DB.Delete(&models.CommentModel{}, "root_parent_id = ?", comment.ID).Count(&count) //TODO:移除DEBUG
-		if global.DB.Model(&models.ArticleModel{}).Where("id = ?", comment.ArticleID).Select("comment_count").Updates(map[string]interface{}{
-			"comment_count": gorm.Expr("comment_count - ?", count+1), //这里的count是删除的二级评论的数量加上一条本身的数量,所以要加1
-		}).Error != nil {
-			logrus.Error("文章评论数更新失败,文章ID:", comment.ArticleID)
+		var childCount int64
+		if err := global.DB.Model(&models.CommentModel{}).Where("root_parent_id = ?", comment.ID).Count(&childCount).Error; err != nil {
+			response.FailWithMsg("查询子评论失败", c)
+			return
 		}
+		//先删子评论,再删自己
+		if err := global.DB.Delete(&models.CommentModel{}, "root_parent_id = ?", comment.ID).Error; err != nil {
+			response.FailWithMsg("删除子评论失败", c)
+			return
+		}
+		if err := global.DB.Delete(&comment).Error; err != nil {
+			response.FailWithMsg("删除评论失败", c)
+			return
+		}
+		//评论数只调整Redis增量,由定时任务回写数据库,避免数据库与增量被重复扣减
+		redis_count.SetCacheCommentBy(comment.ArticleID, -int(childCount+1))
 	} else { //只删除自己
-		global.DB.Delete(&comment)
-		if global.DB.Model(&models.ArticleModel{}).Where("id = ?", comment.ArticleID).Select("comment_count").Updates(map[string]interface{}{
-			"comment_count": gorm.Expr("comment_count - ?", 1),
-		}).Error != nil {
-			logrus.Error("文章评论数更新失败,文章ID:", comment.ArticleID)
+		if err := global.DB.Delete(&comment).Error; err != nil {
+			response.FailWithMsg("删除评论失败", c)
+			return
 		}
+		redis_count.SetCacheCommentBy(comment.ArticleID, -1)
 	}
 
-	//统计缓存-1
-	redis_count.SetCacheComment(comment.ArticleID, false) //增量更新缓存
 	response.OkWithMsg("删除评论成功", c)
 }
 
@@ -370,6 +398,7 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 	}
 
 	claim := jwts.GetClaims(c) //要先登录才能点赞
+	digged := false
 	if global.DB.Take(&models.CommentDiggModel{}, "user_id = ? and comment_id = ?", claim.UserID, req.ID).Error == gorm.ErrRecordNotFound {
 		//查询不到说明没有点赞过,可以点赞
 		if global.DB.Create(&models.CommentDiggModel{
@@ -380,6 +409,7 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 			return
 		}
 		redis_count.SetCacheCommentDigg(req.ID, true) //增量加一
+		digged = true
 	} else {
 		// 查询到说明已经点赞过,取消点赞
 		if global.DB.Delete(&models.CommentDiggModel{}, "user_id = ? and comment_id = ?", claim.UserID, req.ID).Error != nil {
@@ -389,5 +419,13 @@ func (CommentApi) CommentDiggView(c *gin.Context) {
 		redis_count.SetCacheCommentDigg(req.ID, false) //增量减一
 	}
 
-	response.OkWithData(claim, c)
+	//返回最新点赞状态与点赞数(数据库值+Redis增量),前端可直接更新界面
+	diggCount := comment.DiggCount
+	if delta, ok := redis_count.GetAllCacheCommentDigg([]uint{req.ID})[req.ID]; ok {
+		diggCount += delta
+	}
+	if diggCount < 0 {
+		diggCount = 0
+	}
+	response.OkWithData(gin.H{"digged": digged, "diggCount": diggCount}, c)
 }

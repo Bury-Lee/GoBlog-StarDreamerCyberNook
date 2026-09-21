@@ -212,7 +212,9 @@ func (this *ArticleModel) AfterUpdate(tx *gorm.DB) (err error) {
 func (this *ArticleModel) BeforeDelete(tx *gorm.DB) (err error) {
 	//使用批量DELETE,避免把热门文章的全部关联记录加载进内存
 	//SkipHooks:避免UserArticleCollectModel等钩子在批量删除时被零值模型触发,污染Redis计数
-	batch := tx.Session(&gorm.Session{SkipHooks: true})
+	//NewDB:必须为每次级联删除开启全新语句,否则会继承外层ArticleModel删除语句的表名与主键条件
+	//      (表现为 SQL 变成 DELETE FROM article_models WHERE article_id = ? AND id = ?,直接报错)
+	batch := tx.Session(&gorm.Session{NewDB: true, SkipHooks: true})
 	targets := []any{
 		&CommentModel{},
 		&ArticleDiggModel{},

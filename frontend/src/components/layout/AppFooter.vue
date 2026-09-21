@@ -4,7 +4,6 @@
       <div class="app-footer__inner">
         <div class="app-footer__brand">
           <span class="sd-neon-text app-footer__title">{{ siteStore.title }}</span>
-          <span class="sd-dim">· 由 GoBlog 后端驱动</span>
         </div>
         <div class="app-footer__links">
           <router-link class="sd-link" :to="{ name: 'about' }">关于本站</router-link>

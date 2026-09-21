@@ -5,8 +5,8 @@ import type { SiteConfig, SiteIndexRightItem } from '@/api/types'
 import { resolveAssetUrl } from '@/api/request'
 
 const DEFAULT_SITE: SiteConfig = {
-  siteInfo: { title: 'StarDreamer 赛博空间', Logo: '', Beian: '', Mode: 1 },
-  project: { title: 'StarDreamer', icon: '', webPath: '' },
+  siteInfo: { title: '星梦的赛博小屋', Logo: '', Beian: '', Mode: 1 },
+  project: { title: '星梦的赛博小屋', icon: '', webPath: '' },
   seo: { keywords: '', description: '' },
   about: { Version: '', siteDate: '', qq: '', wechat: '', biliBili: '', gitHub: '' },
   indexRight: { list: [] },
@@ -19,7 +19,7 @@ export const useSiteStore = defineStore('site', () => {
   const loaded = ref(false)
   const loading = ref(false)
 
-  const title = computed(() => config.value.project?.title || config.value.siteInfo?.title || 'StarDreamer')
+  const title = computed(() => config.value.project?.title || config.value.siteInfo?.title || '星梦的赛博小屋')
   const siteTitle = computed(() => config.value.siteInfo?.title || title.value)
   const logo = computed(() => resolveAssetUrl(config.value.siteInfo?.Logo || ''))
   const beian = computed(() => config.value.siteInfo?.Beian || '')
@@ -35,7 +35,7 @@ export const useSiteStore = defineStore('site', () => {
   function applyDocumentMeta(): void {
     const project = config.value.project
     const seoInfo = config.value.seo
-    document.title = project?.title || config.value.siteInfo?.title || 'StarDreamer'
+    document.title = project?.title || config.value.siteInfo?.title || '星梦的赛博小屋'
     const setMeta = (name: string, content: string) => {
       if (!content) return
       let node = document.querySelector(`meta[name="${name}"]`)

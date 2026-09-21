@@ -121,18 +121,7 @@ const siteStore = useSiteStore()
 
 const stats = reactive({ articles: 0, users: 0 })
 
-const techStack = [
-  'Gin',
-  'GORM',
-  'MySQL',
-  'Redis',
-  'Elasticsearch 7',
-  'JWT',
-  'Vue 3',
-  'TypeScript',
-  'Vite',
-  'Element Plus',
-]
+const techStack = ['Gin', 'GORM', 'Redis', 'JWT', 'Vue 3', 'TypeScript', 'Vite', 'Element Plus']
 
 const features = [
   '文章发布、分类、搜索与审核流转',
