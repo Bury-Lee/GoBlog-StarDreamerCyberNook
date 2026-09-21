@@ -80,12 +80,14 @@ func (CommentApi) CommentCreateView(c *gin.Context) {
 		}
 	}
 
+	//收集需要发送回复消息的接收人,等评论创建成功后再统一发送(消息里要带上评论ID)
+	var replyRevUserIDs []uint
 	if req.ParentID == 0 {
 		// 父评论路径为空,说明这个评论是一级评论
 		model.RootParentID = nil
 		model.ParentPath = ""
 	}
-	// 否则这是二级评论
+	// 否则这是二级评论(或更深层级的回复)
 	if req.ParentID != 0 {
 		//不对,现在无论是二级评论怎么样,都应该是:model.RootParentID=Parentmodel.Parentpath的/.../,而父评论是最后一个路径,这样哪怕是次级回复也可以有正确的逻辑
 		//为了节省空间,入库时应该以base64编码计入
@@ -98,11 +100,10 @@ func (CommentApi) CommentCreateView(c *gin.Context) {
 		model.ParentPath = utils_other.EncodePath(parentModel.ParentPath, parentModel.ID)
 		//给父评论发消息(自己回复自己不发送)
 		if parentModel.UserID != claims.UserID {
-			message_service.InsertReplyMessage(model, parentModel.UserID)
+			replyRevUserIDs = append(replyRevUserIDs, parentModel.UserID)
 		}
 		if parentModel.RootParentID == nil {
 			// 如果父评论本身是根评论 (RootParentID 为 nil)，则当前评论的根即为父评论,发布的新评论为二级评论
-			//发消息:给根评论发消息
 			model.RootParentID = &parentModel.ID
 		} else {
 			// 如果父评论不是根评论，则直接继承其根评论ID，无需重新解码,发布的新评论为二级的次级评论
@@ -114,52 +115,29 @@ func (CommentApi) CommentCreateView(c *gin.Context) {
 			if err != nil {
 				logrus.Errorf("系统消息发送失败,无法查询.父评论ID: %v, 文章ID: %v", parentModel.RootParentID, req.ArticleID)
 			} else if rootParentModel.UserID != parentModel.UserID && rootParentModel.UserID != claims.UserID { //如果根评论的用户ID和父评论的用户ID不一样,说明是不同的人,就给根评论发消息,如果是同一个人就不发了,避免重复发消息了
-				err = message_service.InsertReplyMessage(model, rootParentModel.UserID)
-				if err != nil {
-					logrus.Error("系统消息发送失败")
-				}
+				replyRevUserIDs = append(replyRevUserIDs, rootParentModel.UserID)
 			}
 		}
 	}
-	//给文章作者发消息(评论自己的文章不发送)
-	if article.UserID != claims.UserID {
-		message_service.InsertCommentMessage(model, article.UserID)
-	}
 
+	//先落库,再发消息:消息需要用到评论ID,创建失败时也不会产生幽灵消息
 	err = global.DB.Create(&model).Error
 	if err != nil {
 		response.FailWithMsg("发布评论失败", c)
 		return
 	}
 
-	// 要给作者,一级评论,父评论发评论消息,在不同的位置插入.已在上面插入了发消息的代码,所以这里就不需要再发一次了,避免重复发消息了
-	// err = message_service.InsertCommentMessage(model, article.UserID) //一定给文章作者发消息
-	// if err != nil {
-	// 	logrus.Errorf("系统消息发送失败:%s", err.Error())
-	// }
-
-	// //以后可以考虑一下优化查询流程,避免重复查询数据库
-	// if model.RootParentID != nil { //存在根评论,说明这是二级评论,给根评论发消息
-	// 	//要先查一遍评论表得到根评论的用户ID,然后才能给根评论发消息
-	// 	var RootParent models.CommentModel
-	// 	err = global.DB.Find(&RootParent, "id = ? and article_id = ?", model.RootParentID, req.ArticleID).Error
-	// 	if err != nil {
-	// 		logrus.Errorf("系统消息发送失败:%s", err.Error())
-	// 	}
-	// 	message_service.InsertReplyMessage(model, RootParent.UserID) //给根评论发消息
-	// 	if req.ParentID != 0 {                                       //如果父评论也是根评论同一个人,就不重复发消息了
-	// 		//如果有父评论,给父评论发消息
-	// 		var Parent models.CommentModel
-	// 		ID, _ := model.Decode()
-	// 		err = global.DB.Find(&Parent, "id = ? and article_id = ?", ID, req.ArticleID).Error
-	// 		if err != nil {
-	// 			logrus.Errorf("系统消息发送失败:%s", err.Error())
-	// 		}
-	// 		if Parent.UserID != RootParent.UserID {
-	// 			message_service.InsertReplyMessage(model, RootParent.UserID) //给父评论发消息
-	// 		}
-	// 	}
-	// }
+	for _, revUserID := range replyRevUserIDs {
+		if err = message_service.InsertReplyMessage(model, revUserID); err != nil {
+			logrus.Error("系统消息发送失败:", err.Error())
+		}
+	}
+	//给文章作者发消息(评论自己的文章不发送)
+	if article.UserID != claims.UserID {
+		if err = message_service.InsertCommentMessage(model, article.UserID); err != nil {
+			logrus.Error("系统消息发送失败:", err.Error())
+		}
+	}
 
 	//旧方法,直接打到数据库,现在改为先更新缓存,然后定时任务再批量更新到数据库
 	// if global.DB.Model(&models.ArticleModel{}).Where("id = ?", req.ArticleID).Select("comment_count").Updates(map[string]interface{}{

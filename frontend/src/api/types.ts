@@ -261,6 +261,20 @@ export interface ArticleReviewPayload {
   msg?: string
 }
 
+export interface ArticleAIReviewItem {
+  articleID: number
+  title: string
+  aiResult: string
+  status: number
+  error?: string
+}
+
+export interface ArticleAIReviewResult {
+  list: ArticleAIReviewItem[]
+  count: number
+  total: number
+}
+
 export interface ArticleHistoryItem {
   id: number
   lookDate: string

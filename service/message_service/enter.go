@@ -6,19 +6,25 @@ import (
 	"errors"
 )
 
-// 注:悲伤的是,由于此时的记录还未创建,所以无法得到comment的ID,以后再想想有没有什么优雅的解决办法吧
-func InsertCommentMessage(model models.CommentModel, RevUserID uint) error { //在发布完评论之后进行调用
-	check := model //查询和本体要分开,不然会把本体覆盖掉
-	global.DB.Preload("UserModel").Preload("ArticleModel").Take(&check)
+// InsertCommentMessage 给文章作者发送评论消息(评论创建成功后调用,消息里带上评论ID)
+func InsertCommentMessage(model models.CommentModel, RevUserID uint) error {
+	var actionUser models.UserModel
+	if err := global.DB.Select("id", "nick_name", "avatar").Take(&actionUser, model.UserID).Error; err != nil {
+		return err
+	}
+	var article models.ArticleModel
+	if err := global.DB.Select("id", "title").Take(&article, model.ArticleID).Error; err != nil {
+		return err
+	}
 	err := global.DB.Create(&models.MessageModel{
 		Type:               models.MessageTypeComment,
 		RevUserID:          RevUserID,
-		ActionUserID:       check.UserID,
-		ActionUserNickname: check.UserModel.NickName,
-		ActionUserAvatar:   check.UserModel.Avatar,
+		ActionUserID:       model.UserID,
+		ActionUserNickname: actionUser.NickName,
+		ActionUserAvatar:   actionUser.Avatar,
 		Title:              models.MessageTypeComment.String(),
-		ArticleID:          check.ArticleID,
-		ArticleTitle:       check.ArticleModel.Title,
+		ArticleID:          model.ArticleID,
+		ArticleTitle:       article.Title,
 		CommentID:          model.ID,
 		Content:            model.Content,
 		IsRead:             false,
@@ -28,18 +34,26 @@ func InsertCommentMessage(model models.CommentModel, RevUserID uint) error { //�
 	}
 	return nil
 }
-func InsertReplyMessage(model models.CommentModel, RevUserID uint) error { //在发布完评论之后进行调用
-	check := model //查询和本体要分开,不然会把本体覆盖掉
-	global.DB.Preload("UserModel").Preload("ArticleModel").Take(&check)
+
+// InsertReplyMessage 给被回复的评论作者发送回复消息(评论创建成功后调用,消息里带上评论ID)
+func InsertReplyMessage(model models.CommentModel, RevUserID uint) error {
+	var actionUser models.UserModel
+	if err := global.DB.Select("id", "nick_name", "avatar").Take(&actionUser, model.UserID).Error; err != nil {
+		return err
+	}
+	var article models.ArticleModel
+	if err := global.DB.Select("id", "title").Take(&article, model.ArticleID).Error; err != nil {
+		return err
+	}
 	err := global.DB.Create(&models.MessageModel{
 		Type:               models.MessageTypeReply,
 		RevUserID:          RevUserID,
 		ActionUserID:       model.UserID,
-		ActionUserNickname: check.UserModel.NickName,
-		ActionUserAvatar:   check.UserModel.Avatar,
+		ActionUserNickname: actionUser.NickName,
+		ActionUserAvatar:   actionUser.Avatar,
 		Title:              models.MessageTypeReply.String(),
-		ArticleID:          check.ArticleID,
-		ArticleTitle:       check.ArticleModel.Title,
+		ArticleID:          model.ArticleID,
+		ArticleTitle:       article.Title,
 		CommentID:          model.ID,
 		IsRead:             false,
 		Content:            model.Content,
@@ -100,7 +114,6 @@ func InsertCollectMessage(model models.UserArticleCollectModel) error { //给文
 //TODO:以后加入给关注的人发送关注消息
 
 func InsertSystemMessage(message models.MessageModel) error { //给别人发送系统消息,例如审核通过,账号被冻结等
-	//要查询点赞的人的用户信息
 	err := global.DB.Create(&models.MessageModel{
 		Type:               models.MessageTypeSystem,
 		RevUserID:          message.RevUserID,
@@ -110,6 +123,10 @@ func InsertSystemMessage(message models.MessageModel) error { //给别人发送�
 		Title:              message.Title,
 		ArticleID:          message.ArticleID,
 		ArticleTitle:       message.ArticleTitle,
+		CommentID:          message.CommentID,
+		Content:            message.Content,
+		LinkTitle:          message.LinkTitle,
+		LinkHref:           message.LinkHref,
 		IsRead:             false,
 	}).Error
 	if err != nil {

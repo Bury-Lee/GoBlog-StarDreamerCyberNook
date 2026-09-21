@@ -60,6 +60,7 @@
                   :current-user-id="userStore.userId"
                   :is-admin="userStore.isAdmin"
                   @digg="onDigg"
+                  @reply="onReply"
                   @remove="onRemove"
                 />
                 <div v-if="childState[comment.id].count > childState[comment.id].list.length" class="comment-section__more">

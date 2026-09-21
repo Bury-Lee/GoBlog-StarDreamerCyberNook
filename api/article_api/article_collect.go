@@ -11,9 +11,11 @@ import (
 	jwts "StarDreamerCyberNook/utils/jwts"
 	utils_other "StarDreamerCyberNook/utils/other"
 	"StarDreamerCyberNook/utils/sql"
+	"errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 type ArticleCollectRequest struct {
@@ -34,71 +36,77 @@ func (ArticleApi) ArticleCollectView(c *gin.Context) {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
-	var collectModel models.CollectModel
 	claims := jwts.GetClaims(c)
+
+	// 确定目标收藏夹
+	var collectModel models.CollectModel
 	if req.CollectID == 0 {
-		// 是默认收藏夹
+		// 使用默认收藏夹,不存在时自动创建
 		err = global.DB.Take(&collectModel, "user_id = ? and is_default = ?", claims.UserID, true).Error
-		if err != nil {
-			// 创建一个默认收藏夹
-			collectModel.Title = "默认收藏夹"
-			collectModel.UserID = claims.UserID
-			collectModel.IsDefault = true
-			global.DB.Create(&collectModel)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			collectModel = models.CollectModel{Title: "默认收藏夹", UserID: claims.UserID, IsDefault: true}
+			if err = global.DB.Create(&collectModel).Error; err != nil {
+				response.FailWithMsg("创建默认收藏夹失败", c)
+				return
+			}
+		} else if err != nil {
+			response.FailWithMsg("查询默认收藏夹失败", c)
+			return
 		}
-		req.CollectID = collectModel.ID
 	} else {
-		// 判断收藏夹是否存在，并且是否是自己创建的
-		err = global.DB.Take(&collectModel, "user_id = ? ", claims.UserID).Error
-		if err != nil {
+		// 指定收藏夹必须存在且属于当前用户
+		if err = global.DB.Take(&collectModel, "id = ? and user_id = ?", req.CollectID, claims.UserID).Error; err != nil {
 			response.FailWithMsg("收藏夹不存在", c)
 			return
 		}
 	}
 
-	// 判断是否收藏
+	// 一个用户对一篇文章只保留一条收藏记录,收藏数统一由模型钩子维护,避免手动双写导致漂移
 	var articleCollect models.UserArticleCollectModel
-	err = global.DB.Where(models.UserArticleCollectModel{
-		UserID:    claims.UserID,
-		ArticleID: req.ArticleID,
-		CollectID: req.CollectID,
-	}).Take(&articleCollect).Error
-
-	if err != nil {
-		// 收藏
-		record := models.UserArticleCollectModel{
-			UserID:    claims.UserID,
-			ArticleID: req.ArticleID,
-			CollectID: req.CollectID,
-		}
-		if err = global.DB.Create(&record).Error; err != nil {
-			response.FailWithMsg("收藏失败", c)
+	err = global.DB.Take(&articleCollect, "user_id = ? and article_id = ?", claims.UserID, req.ArticleID).Error
+	if err == nil {
+		if articleCollect.CollectID == collectModel.ID {
+			// 已收藏且是同一个收藏夹:取消收藏
+			// 注:该中间表没有主键,必须显式带Where条件,同时把真实模型传给Delete让钩子拿到文章ID
+			if err = global.DB.Where("user_id = ? and article_id = ?", claims.UserID, req.ArticleID).
+				Delete(&articleCollect).Error; err != nil {
+				response.FailWithMsg("取消收藏失败", c)
+				return
+			}
+			response.OkWithMsg("取消收藏成功", c)
 			return
 		}
-		// 对收藏夹进行加1
-		redis_count.SetCacheCollect(req.ArticleID, true)
-		response.OkWithMsg("收藏成功", c)
-		// 发送收藏消息,失败只记录日志,不影响主流程
-		if err = message_service.InsertCollectMessage(record); err != nil {
-			logrus.Error("发送收藏消息失败", err.Error())
+		// 已收藏但在别的收藏夹:移动到目标收藏夹,收藏总数不变
+		// 注:该中间表没有主键,必须显式带Where条件
+		if err = global.DB.Model(&models.UserArticleCollectModel{}).
+			Where("user_id = ? and article_id = ?", claims.UserID, req.ArticleID).
+			Update("collect_id", collectModel.ID).Error; err != nil {
+			response.FailWithMsg("移动收藏夹失败", c)
+			return
 		}
+		response.OkWithMsg("已移动到新的收藏夹", c)
 		return
 	}
-	// 取消收藏
-	err = global.DB.Where(models.UserArticleCollectModel{
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		response.FailWithMsg("查询收藏记录失败", c)
+		return
+	}
+
+	// 收藏
+	record := models.UserArticleCollectModel{
 		UserID:    claims.UserID,
 		ArticleID: req.ArticleID,
-		CollectID: req.CollectID,
-	}).Delete(&models.UserArticleCollectModel{}).Error
-
-	if err != nil {
-		response.FailWithMsg("取消收藏失败", c)
+		CollectID: collectModel.ID,
+	}
+	if err = global.DB.Create(&record).Error; err != nil {
+		response.FailWithMsg("收藏失败", c)
 		return
 	}
-	response.OkWithMsg("取消收藏成功", c)
-	//TODO:收藏统计改为使用redis缓存,然后redis定时任务和数据库同步更新,而不要直接更新数据库了,有并发问题
-	// global.DB.Model(&collectModel).Update("article_count", gorm.Expr("article_count - 1"))
-	redis_count.SetCacheCollect(req.ArticleID, false)
+	response.OkWithMsg("收藏成功", c)
+	// 发送收藏消息,失败只记录日志,不影响主流程
+	if err = message_service.InsertCollectMessage(record); err != nil {
+		logrus.Error("发送收藏消息失败", err.Error())
+	}
 }
 
 type CollectCreateRequest struct { //创建收藏夹请求参数,请求创建时不用传id参数,除了创建也可以用于更新收藏夹
@@ -178,9 +186,12 @@ func (ArticleApi) CollectRemoveView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	//其实用户可能传入0 ID进来,不过问题应该不大,数据库可以处理这个错误
+	if len(req.IDList) == 0 {
+		response.OkWithMsg("未找到可删除的收藏夹或无权限", c)
+		return
+	}
+
 	// 2. 基础查询构建 (注意：不要提前执行 Find)
-	// 假设模型名为 CollectModel，表名为 collects
 	query := global.DB.Model(&models.CollectModel{}).
 		Where("id IN ? AND is_default = ?", req.IDList, false)
 
@@ -188,33 +199,54 @@ func (ArticleApi) CollectRemoveView(c *gin.Context) {
 	claims := jwts.GetClaims(c)
 	if claims.Role != enum.AdminRole {
 		// 非管理员只能删除自己的收藏夹
-		// 将 user_id 条件链式追加到 query 中
 		query = query.Where("user_id = ?", claims.UserID)
 	}
 
-	// 4. 执行删除操作
-	// 直接执行 Delete，不需要先 Find 再 Delete，减少一次数据库交互
-	// Delete 会自动根据前面的 Where 条件生成 SQL
-	result := query.Delete(&models.CollectModel{})
-
-	if result.Error != nil {
-		// 数据库层面错误
-		response.FailWithMsg("删除收藏夹失败: "+result.Error.Error(), c)
+	// 4. 先取出真正要删除的收藏夹ID,用于级联清理收藏记录
+	var folderIDs []uint
+	if err := query.Pluck("id", &folderIDs).Error; err != nil {
+		response.FailWithMsg("查询收藏夹失败: "+err.Error(), c)
 		return
 	}
-
-	// 5. 检查受影响行数
-	if result.RowsAffected == 0 {
+	if len(folderIDs) == 0 {
 		// 情况 A: ID 列表为空
 		// 情况 B: ID 不存在
 		// 情况 C: 所有 ID 都是默认收藏夹 (is_default=true)
 		// 情况 D: 非管理员尝试删除他人的收藏夹 (被 user_id 过滤)
-		// 根据业务需求，这里可以返回“未找到可删除项”或者直接视为成功（幂等性）
-		// 通常如果没有删除任何数据，提示“无符合条件的记录”比报“失败”更友好
 		response.OkWithMsg("未找到可删除的收藏夹或无权限", c)
-		// 如果业务严格要求必须删掉才算成功，则改为:
-		// response.FailWithMsg("未找到可删除的收藏夹或无权限", c)
 		return
+	}
+
+	// 5. 统计收藏夹内的收藏记录,按文章聚合后回退Redis计数
+	var records []models.UserArticleCollectModel
+	if err := global.DB.Where("collect_id IN ?", folderIDs).Find(&records).Error; err != nil {
+		response.FailWithMsg("查询收藏记录失败", c)
+		return
+	}
+	deltaMap := make(map[uint]int)
+	for _, record := range records {
+		deltaMap[record.ArticleID]--
+	}
+
+	// 6. 事务内删除收藏记录与收藏夹(跳过钩子,计数在上面统一回退)
+	err := global.DB.Transaction(func(tx *gorm.DB) error {
+		if len(records) > 0 {
+			if err := tx.Session(&gorm.Session{SkipHooks: true}).
+				Where("collect_id IN ?", folderIDs).
+				Delete(&models.UserArticleCollectModel{}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Where("id IN ?", folderIDs).Delete(&models.CollectModel{}).Error
+	})
+	if err != nil {
+		response.FailWithMsg("删除收藏夹失败: "+err.Error(), c)
+		return
+	}
+
+	// 7. 数据库提交成功后再调整缓存计数
+	for articleID, delta := range deltaMap {
+		redis_count.SetCacheCollectBy(articleID, delta)
 	}
 
 	response.OkWithMsg("删除收藏夹成功", c)
@@ -328,5 +360,13 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 		response.FailWithMsg("查询收藏夹文章列表失败", c)
 		return
 	}
+
+	//叠加Redis中未同步的计数增量,避免收藏/评论后要等定时任务回写才看到变化
+	ptrs := make([]*models.ArticleModel, 0, len(data))
+	for i := range data {
+		ptrs = append(ptrs, &data[i])
+	}
+	applyArticleCountDeltas(ptrs)
+
 	response.OkWithList(data, count, c)
 }

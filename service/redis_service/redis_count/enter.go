@@ -38,18 +38,17 @@ redis.call('SADD', KEYS[2], ARGV[1])
 return 1
 `)
 
-// ackScript 确认同步:按增量回退字段值,不会写入负值,归零后删除字段
-// KEYS[1]: 计数哈希键, ARGV[1]: 字段(ID), ARGV[2]: 已同步的增量
+// ackScript 确认同步:按增量原子回退字段值
+// 说明:直接使用HINCRBY回退,允许字段出现负值。
+// 若在"读取增量"与"确认回退"之间发生了取消操作,负数会保留下来并在下一轮同步时抵消,
+// 而旧实现把负值截断为0,会把这段窗口内的取消增量吞掉,造成计数只增不减的漂移。
+// KEYS[1]: 计数哈希键, KEYS[2]: 脏ID集合键, ARGV[1]: 字段(ID), ARGV[2]: 已同步的增量
 var ackScript = redis.NewScript(`
-local cur = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
-local delta = tonumber(ARGV[2])
-if delta < 0 then delta = -delta end
-local next = cur - delta
-if next < 0 then next = 0 end
-if next == 0 then
+local cur = redis.call('HINCRBY', KEYS[1], ARGV[1], -tonumber(ARGV[2]))
+if cur == 0 then
   redis.call('HDEL', KEYS[1], ARGV[1])
 else
-  redis.call('HSET', KEYS[1], ARGV[1], next)
+  redis.call('SADD', KEYS[2], ARGV[1])
 end
-return next
+return cur
 `)

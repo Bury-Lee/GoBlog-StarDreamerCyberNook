@@ -5,7 +5,7 @@
         <div>
           <h3 class="admin-review__title">待审核文章</h3>
           <p class="sd-dim admin-review__desc">
-            后端审核列表返回状态为「草稿」的文章,通过后状态变为已发布,驳回则退回草稿并发送系统通知
+            列表返回状态为「审核中」的文章,通过后状态变为已发布,驳回则退回草稿并发送系统通知
           </p>
         </div>
         <div class="admin-review__tools">
@@ -17,6 +17,10 @@
             @keyup.enter="search"
             @clear="search"
           />
+          <el-button type="warning" plain :loading="aiReviewing" @click="aiReviewAll">
+            <el-icon><MagicStick /></el-icon>
+            AI 批量审核
+          </el-button>
           <el-button @click="load">
             <el-icon><Refresh /></el-icon>
             刷新
@@ -44,6 +48,9 @@
           </div>
           <div class="review-card__actions">
             <el-button size="small" @click="preview(item)">预览</el-button>
+            <el-button size="small" type="warning" plain :loading="aiReviewing" @click="aiReviewOne(item)">
+              AI 审核
+            </el-button>
             <el-button size="small" type="danger" plain @click="openReview(item, 0)">驳回</el-button>
             <el-button size="small" type="primary" @click="openReview(item, 2)">通过</el-button>
           </div>
@@ -101,10 +108,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { MagicStick, Refresh } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
-import { fetchArticleDetail, fetchReviewArticles, reviewArticle } from '@/api/article'
+import { aiReviewArticles, fetchArticleDetail, fetchReviewArticles, reviewArticle } from '@/api/article'
 import type { ArticleDetailResponse, ArticleModel } from '@/api/types'
 import {
   articleStatusLabel,
@@ -121,6 +128,7 @@ const previewArticle = ref<ArticleDetailResponse | null>(null)
 const previewHtml = ref('')
 const reviewVisible = ref(false)
 const reviewing = ref(false)
+const aiReviewing = ref(false)
 const reviewMsg = ref('')
 const reviewStatus = ref(2)
 const reviewTarget = ref<ArticleModel | null>(null)
@@ -167,6 +175,37 @@ async function submitReview(): Promise<void> {
     // ignore
   } finally {
     reviewing.value = false
+  }
+}
+
+async function aiReviewAll(): Promise<void> {
+  aiReviewing.value = true
+  try {
+    const result = await aiReviewArticles({ limit: 10 })
+    ElMessage.success(`AI 审核完成:共 ${result?.total ?? 0} 篇,成功 ${result?.count ?? 0} 篇`)
+    await load()
+  } catch {
+    // 错误提示已由请求层处理
+  } finally {
+    aiReviewing.value = false
+  }
+}
+
+async function aiReviewOne(item: ArticleModel): Promise<void> {
+  aiReviewing.value = true
+  try {
+    const result = await aiReviewArticles({ articleID: item.id })
+    const first = result?.list?.[0]
+    if (first?.error) {
+      ElMessage.error(`AI 审核失败:${first.error}`)
+    } else {
+      ElMessage.success(`AI 审核结果:${first?.aiResult || '已完成'}`)
+    }
+    await load()
+  } catch {
+    // 错误提示已由请求层处理
+  } finally {
+    aiReviewing.value = false
   }
 }
 </script>

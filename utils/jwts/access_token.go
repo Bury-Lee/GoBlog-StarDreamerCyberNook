@@ -53,8 +53,8 @@ func GetAccessToken(claims Claims) (string, error) {
 			// 设置过期时间：当前时间 + 配置文件中的AccessExpire小时数
 			// 这里设置为24小时后过期（具体时长由配置决定）
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(global.Config.Jwt.AccessExpire) * time.Minute)),
-			// IssuedAt:  jwt.NewNumericDate(time.Now()),                     // 当前签发时间设置（已注释）
-			// 设置JWT发行人，用于验证JWT的来源
+			//每次签发使用唯一ID,避免同秒登录生成相同token
+			ID:     newJTI(),
 			Issuer: global.Config.Jwt.Issuer,
 		},
 	})

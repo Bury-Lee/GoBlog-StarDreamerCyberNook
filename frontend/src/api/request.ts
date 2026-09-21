@@ -44,17 +44,24 @@ let refreshPromise: Promise<string> | null = null
 async function requestNewAccessToken(): Promise<string> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) throw new ApiError(401, '登录状态已失效')
-  const response = await axios.post<ApiResult<string>>(
-    `${API_BASE}/user/token`,
-    null,
-    { headers: { refreshToken }, timeout: 15000 },
-  )
-  const payload = response.data
-  if (!payload || payload.code !== 200 || !payload.data) {
-    throw new ApiError(401, payload?.message || '登录状态已失效')
+  try {
+    const response = await axios.post<ApiResult<string>>(
+      `${API_BASE}/user/token`,
+      null,
+      { headers: { refreshToken }, timeout: 15000 },
+    )
+    const payload = response.data
+    if (!payload || payload.code !== 200 || !payload.data) {
+      throw new ApiError(payload?.code ?? 401, payload?.message || '登录状态已失效')
+    }
+    setAccessToken(payload.data)
+    return payload.data
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    const response = (error as AxiosError<ApiResult<unknown>>)?.response
+    const payload = response?.data
+    throw new ApiError(payload?.code ?? response?.status ?? 0, payload?.message || '刷新登录状态失败')
   }
-  setAccessToken(payload.data)
-  return payload.data
 }
 
 function refreshAccessTokenOnce(): Promise<string> {
@@ -85,10 +92,16 @@ async function redirectToLogin(): Promise<void> {
 }
 
 const AUTH_ERROR_CODES = [201, 401, 422]
+const RATE_LIMIT_MESSAGE = '请求过于频繁'
 
 interface RetryOutcome {
   ok: boolean
   data?: unknown
+  error?: unknown
+}
+
+function isRateLimitError(error: unknown): boolean {
+  return error instanceof ApiError && error.message.includes(RATE_LIMIT_MESSAGE)
 }
 
 async function tryRefreshAndRetry(config: RetriableConfig | undefined): Promise<RetryOutcome | null> {
@@ -102,14 +115,29 @@ async function tryRefreshAndRetry(config: RetriableConfig | undefined): Promise<
     config.headers.set('token', fresh)
     const data = await instance.request(config)
     return { ok: true, data }
-  } catch {
-    return { ok: false }
+  } catch (error) {
+    return { ok: false, error }
   }
+}
+
+// 限流(同IP每分钟64次)导致的刷新失败不能当成"登录过期",否则会把正常用户踢下线
+function rejectRefreshFailure(error: unknown, config: RetriableConfig, message?: string): never {
+  if (isRateLimitError(error)) {
+    const tip = `${RATE_LIMIT_MESSAGE},请稍后再试`
+    if (!config.silent) ElMessage.error(tip)
+    throw new ApiError(422, tip)
+  }
+  clearAuth()
+  void redirectToLogin()
+  throw new ApiError(401, message || '登录状态已过期,请重新登录')
 }
 
 async function handleUnauthorized(config: RetriableConfig | undefined, message?: string): Promise<unknown> {
   const outcome = await tryRefreshAndRetry(config)
   if (outcome?.ok) return outcome.data
+  if (outcome && !outcome.ok && config) {
+    rejectRefreshFailure(outcome.error, config, message)
+  }
   clearAuth()
   void redirectToLogin()
   throw new ApiError(401, message || '登录状态已过期,请重新登录')
@@ -133,9 +161,7 @@ instance.interceptors.response.use(
       const outcome = await tryRefreshAndRetry(config)
       if (outcome?.ok) return outcome.data as never
       if (outcome && !outcome.ok) {
-        clearAuth()
-        void redirectToLogin()
-        throw new ApiError(payload.code, payload.message || '登录状态已过期,请重新登录')
+        rejectRefreshFailure(outcome.error, config, payload.message)
       }
     }
 
@@ -153,10 +179,8 @@ instance.interceptors.response.use(
     if (status && AUTH_ERROR_CODES.includes(status)) {
       const outcome = await tryRefreshAndRetry(config)
       if (outcome?.ok) return outcome.data as never
-      if (outcome && !outcome.ok) {
-        clearAuth()
-        void redirectToLogin()
-        throw new ApiError(401, '登录状态已过期,请重新登录')
+      if (outcome && !outcome.ok && config) {
+        rejectRefreshFailure(outcome.error, config)
       }
     }
 

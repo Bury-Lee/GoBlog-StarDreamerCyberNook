@@ -246,7 +246,8 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 					list = append(list, item)
 				}
 			}
-			// 6. 返回搜索结果
+			// 6. 叠加Redis中未同步的计数增量后返回搜索结果
+			applySearchCountDeltas(list)
 			response.OkWithList(list, int(total), c)
 		}
 		return
@@ -459,7 +460,9 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 			}
 		}
 
-		//TODO:以后加入带点赞数和评论数的响应字段
+		//叠加Redis中未同步的计数增量,避免点赞/收藏/评论后要等定时任务回写才看到变化
+		applySearchCountDeltas(list)
+
 		// 返回成功响应，包含文章列表和总数
 		response.OkWithList(list, int(count), c)
 	}

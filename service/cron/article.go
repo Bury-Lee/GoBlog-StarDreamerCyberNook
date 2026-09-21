@@ -7,16 +7,27 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
+
+// articleCountSyncMutex 文章计数同步与对账任务互斥,避免对账读到同步中途的状态而误判
+var articleCountSyncMutex sync.Mutex
 
 // 异步双写实现计数同步
 // SyncArticle 同步Redis中的文章增量统计到数据库
 // 逻辑流程：拉取ID -> 读取数据 -> 拼接SQL -> 执行更新 -> 确认回写
 // 此处一次更新多个字段,对内存有更高的要求,如果内存不足可以牺牲性能,分多几批更新,一次弹出一个字段的更新
 func SyncArticle() {
+	//与对账任务互斥,避免两边同时修正同一批计数
+	if !articleCountSyncMutex.TryLock() {
+		logrus.Info("文章计数同步任务正在执行,跳过本次任务")
+		return
+	}
+	defer articleCountSyncMutex.Unlock()
+
 	//检查是否有锁,如果有则跳过本次启动
 	batchSize := 500
 	total := 0
@@ -98,6 +109,8 @@ func SyncArticle() {
 
 		// 数据库更新成功，清理Redis缓存
 		redis_count.AckArticleSync(flushIDs, lookMap, diggMap, collectMap, comMap)
+		//详情缓存里保存的是回写前的旧计数,需要失效,否则缓存未过期时叠加增量会显示成旧值
+		redis_count.InvalidateArticleDetailCache(flushIDs)
 		total += len(flushIDs)
 		logrus.Infof("批量更新成功 [批次 %d, 数量 %d]", batchIndex, len(flushIDs))
 	}

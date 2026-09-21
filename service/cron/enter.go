@@ -46,5 +46,8 @@ func Cron() {
 		crontab.AddFunc("0 */10 * * * *", SyncCleanHistory) //10分钟尝试清理一次浏览记录
 	}
 
+	// 每天凌晨4:30对账一次,通过以关系表为基准修正文章计数的漂移
+	// crontab.AddFunc("0 30 4 * * *", ReconcileArticleCount)
+
 	crontab.Start()
 }

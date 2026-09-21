@@ -5,7 +5,6 @@ import (
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
-	"StarDreamerCyberNook/service/redis_service/redis_count"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"context"
 	"encoding/json"
@@ -61,12 +60,7 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 
 		// 计数只在响应阶段叠加,不写回详情缓存
 		result := cached
-		collectCount := redis_count.GetCacheCollect(result.ID)
-		lookCount := redis_count.GetCacheLook(result.ID)
-		diggCount := redis_count.GetCacheDigg(result.ID)
-		result.CollectCount += collectCount
-		result.LookCount += lookCount
-		result.DiggCount += diggCount
+		applyArticleCountDeltas([]*models.ArticleModel{&result.ArticleModel})
 
 		response.OkWithData(result, c)
 		return
@@ -107,12 +101,7 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 
 	// 计数只在响应阶段叠加,不写回详情缓存
 	result := cached
-	collectCount := redis_count.GetCacheCollect(result.ID)
-	lookCount := redis_count.GetCacheLook(result.ID)
-	diggCount := redis_count.GetCacheDigg(result.ID)
-	result.CollectCount += collectCount
-	result.LookCount += lookCount
-	result.DiggCount += diggCount
+	applyArticleCountDeltas([]*models.ArticleModel{&result.ArticleModel})
 
 	response.OkWithData(result, c)
 
