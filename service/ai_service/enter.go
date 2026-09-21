@@ -10,6 +10,42 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// aiPingTimeout AI服务可用性探测的超时时间,比正式审核的60秒短,避免不可用时长时间阻塞定时任务
+const aiPingTimeout = 10 * time.Second
+
+// Available 探测AI服务是否可用
+// 说明:用一次最小化的对话请求做探活,任何错误(未启用/未初始化/请求失败)都视为不可用,
+// 返回错误信息便于调用方记录日志
+func Available() (bool, error) {
+	if !global.Config.AI.Enable {
+		return false, errors.New("AI功能未启用")
+	}
+	if global.AIClient == nil {
+		return false, errors.New("AI客户端未初始化")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), aiPingTimeout)
+	defer cancel()
+
+	_, err := global.AIClient.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: global.Config.AI.Model,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: "ping",
+				},
+			},
+			MaxTokens: 1,
+		},
+	)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // 输入内容和提示词,返回模型回复和错误信息
 func CreateSingleReply(content string, prompt string) (string, error) {
 	//TODO:改为配置中设置

@@ -32,8 +32,8 @@
             class="admin-images__search"
             placeholder="搜索文件名"
             clearable
-            @keyup.enter="search"
-            @clear="search"
+            @keyup.enter="onSearch"
+            @clear="onSearch"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
@@ -59,6 +59,10 @@
           @click="toggleSelect(item.id)"
         >
           <el-image :src="item.webPath || imageUrl(item.id)" fit="cover" class="admin-image-card__img" />
+          <div class="admin-image-card__actions">
+            <el-button size="small" @click.stop="copyOne(item)">复制链接</el-button>
+            <el-button size="small" type="danger" plain @click.stop="removeOne(item)">删除</el-button>
+          </div>
           <div class="admin-image-card__info">
             <span class="sd-ellipsis admin-image-card__name" :title="item.filename">{{ item.filename }}</span>
             <span class="sd-dim">{{ formatFileSize(item.size) }}</span>
@@ -72,8 +76,8 @@
         :limit="limit"
         :count="count"
         :page-sizes="[12, 24, 36, 40]"
-        @update:page="changePage"
-        @update:limit="changeLimit"
+        @update:page="onPageChange"
+        @update:limit="onLimitChange"
       />
     </section>
   </div>
@@ -88,6 +92,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import { fetchImages, removeImages, uploadImage } from '@/api/ops'
 import { imageUrl } from '@/api/request'
+import type { ImageListItem } from '@/api/types'
 import { copyToClipboard } from '@/utils/html'
 import { formatFileSize } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
@@ -109,10 +114,68 @@ function toggleSelect(id: number): void {
   }
 }
 
+function onSearch(): void {
+  selection.value = []
+  search()
+}
+
+function onPageChange(next: number): void {
+  selection.value = []
+  changePage(next)
+}
+
+function onLimitChange(next: number): void {
+  selection.value = []
+  changeLimit(next)
+}
+
+let uploadingCount = 0
+let uploadSuccessCount = 0
+let uploadFailCount = 0
+
 async function doUpload(options: UploadRequestOptions): Promise<void> {
+  uploadingCount += 1
   try {
     await uploadImage(options.file as File)
-    ElMessage.success('上传成功')
+    uploadSuccessCount += 1
+  } catch {
+    uploadFailCount += 1
+  } finally {
+    uploadingCount -= 1
+    if (uploadingCount === 0) {
+      const success = uploadSuccessCount
+      const fail = uploadFailCount
+      uploadSuccessCount = 0
+      uploadFailCount = 0
+      ElMessage({
+        type: fail ? 'warning' : 'success',
+        message: `成功 ${success} 张/失败 ${fail} 张`,
+      })
+      await load()
+    }
+  }
+}
+
+async function copyOne(item: ImageListItem): Promise<void> {
+  const path = item.webPath || imageUrl(item.id)
+  try {
+    await copyToClipboard(`${window.location.origin}${path}`)
+    ElMessage.success('已复制图片链接')
+  } catch {
+    ElMessage.warning('复制失败')
+  }
+}
+
+async function removeOne(item: ImageListItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`确认删除图片《${item.filename}》?`, '删除图片', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await removeImages([item.id])
+    ElMessage.success('删除成功')
+    selection.value = selection.value.filter((id) => id !== item.id)
     await load()
   } catch {
     // ignore
@@ -231,6 +294,27 @@ async function removeSelected(): Promise<void> {
   display: block;
   width: 100%;
   height: 110px;
+}
+
+.admin-image-card__actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: linear-gradient(180deg, rgba(9, 14, 26, 0), rgba(9, 14, 26, 0.92));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.admin-image-card:hover .admin-image-card__actions,
+.admin-image-card:focus-within .admin-image-card__actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .admin-image-card__info {

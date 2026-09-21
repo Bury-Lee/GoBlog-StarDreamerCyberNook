@@ -16,7 +16,10 @@
             <div class="profile-card__meta">
               <span v-if="info?.region"><el-icon><Location /></el-icon>{{ info.region }}</span>
               <span v-if="info?.age"><el-icon><Calendar /></el-icon>{{ info.age }} 岁</span>
-              <span><el-icon><Timer /></el-icon>入驻 {{ info?.existDay || 0 }} 天</span>
+              <span>
+                <el-icon><Timer /></el-icon>
+                {{ info?.existDay === 0 ? '今天刚加入' : `入驻 ${info?.existDay || 0} 天` }}
+              </span>
               <span v-if="info?.lastLoginTime"><el-icon><Clock /></el-icon>最近活跃 {{ fromNow(info.lastLoginTime) }}</span>
             </div>
           </div>
@@ -35,18 +38,18 @@
         </div>
 
         <div class="profile-card__stats">
-          <div class="profile-card__stat">
+          <button type="button" class="profile-card__stat" @click="switchTab('articles')">
             <span class="profile-card__stat-value sd-neon-text">{{ info?.articleCount || 0 }}</span>
             <span class="sd-dim">文章</span>
-          </div>
-          <div class="profile-card__stat">
+          </button>
+          <button type="button" class="profile-card__stat" @click="switchTab('social')">
             <span class="profile-card__stat-value sd-neon-text">{{ info?.fansCount || 0 }}</span>
             <span class="sd-dim">粉丝</span>
-          </div>
-          <div class="profile-card__stat">
+          </button>
+          <button type="button" class="profile-card__stat" @click="switchTab('social')">
             <span class="profile-card__stat-value sd-neon-text">{{ info?.followCount || 0 }}</span>
             <span class="sd-dim">关注</span>
-          </div>
+          </button>
         </div>
       </section>
 
@@ -97,28 +100,63 @@
           </el-tab-pane>
 
           <el-tab-pane label="关注 / 粉丝" name="social">
-            <div class="profile-body__social">
-              <el-alert
-                type="info"
-                :closable="false"
-                show-icon
-                title="关注与粉丝接口当前未在后端注册(404),该模块暂时不可用"
-              />
+            <div v-loading="socialLoading" class="profile-body__social">
               <div class="profile-body__social-grid">
                 <div class="profile-body__social-col">
                   <h4 class="profile-body__social-title">关注({{ follows.count }})</h4>
-                  <EmptyState v-if="!follows.list.length" text="暂无数据" compact />
-                  <div v-for="item in follows.list" :key="item.focusUserID" class="profile-body__social-item">
-                    <UserAvatar :src="item.focusUserAvatar" :name="item.focusUserNickname" :size="30" />
-                    <span class="sd-ellipsis">{{ item.focusUserNickname }}</span>
-                  </div>
+                  <EmptyState
+                    v-if="!socialLoading && !follows.list.length"
+                    :text="follows.error || '暂无数据'"
+                    compact
+                  />
+                  <button
+                    v-for="item in follows.list"
+                    :key="item.id"
+                    type="button"
+                    class="profile-body__social-item"
+                    @click="goUser(item.id)"
+                  >
+                    <UserAvatar :src="item.avatar" :name="item.nickname" :size="30" />
+                    <span class="sd-ellipsis">{{ item.nickname || `用户 #${item.id}` }}</span>
+                  </button>
+                  <el-button
+                    v-if="follows.list.length < follows.count"
+                    text
+                    size="small"
+                    class="profile-body__social-more"
+                    :loading="follows.loading"
+                    @click="loadMoreFollows"
+                  >
+                    加载更多
+                  </el-button>
                 </div>
                 <div class="profile-body__social-col">
                   <h4 class="profile-body__social-title">粉丝({{ followers.count }})</h4>
-                  <EmptyState v-if="!followers.list.length" text="暂无数据" compact />
-                  <div v-for="item in followers.list" :key="item.id" class="profile-body__social-item">
-                    <span class="sd-dim">用户 ID:{{ item.userID }}</span>
-                  </div>
+                  <EmptyState
+                    v-if="!socialLoading && !followers.list.length"
+                    :text="followers.error || '暂无数据'"
+                    compact
+                  />
+                  <button
+                    v-for="item in followers.list"
+                    :key="item.id"
+                    type="button"
+                    class="profile-body__social-item"
+                    @click="goUser(item.id)"
+                  >
+                    <UserAvatar :src="item.avatar" :name="item.nickname" :size="30" />
+                    <span class="sd-ellipsis">{{ item.nickname || `用户 #${item.id}` }}</span>
+                  </button>
+                  <el-button
+                    v-if="followers.list.length < followers.count"
+                    text
+                    size="small"
+                    class="profile-body__social-more"
+                    :loading="followers.loading"
+                    @click="loadMoreFollowers"
+                  >
+                    加载更多
+                  </el-button>
                 </div>
               </div>
             </div>
@@ -156,7 +194,7 @@ import ArticleCard from '@/components/article/ArticleCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import { fetchArticleHistory, fetchArticleList, fetchCollectFolders } from '@/api/article'
-import { followUser, fetchFollowList, fetchFollowerList, unfollowUser } from '@/api/follow'
+import { checkFollow, followUser, fetchFollowList, fetchFollowerList, unfollowUser } from '@/api/follow'
 import { fetchUserBaseInfo, fetchUserDetail } from '@/api/user'
 import { resolveAssetUrl } from '@/api/request'
 import type {
@@ -164,7 +202,6 @@ import type {
   ArticleListResponse,
   CollectModel,
   FollowModel,
-  FollowUserItem,
   UserBaseInfo,
   UserDetail,
 } from '@/api/types'
@@ -198,8 +235,16 @@ const collect = reactive({
   error: '',
 })
 
-const follows = reactive({ list: [] as FollowUserItem[], count: 0 })
-const followers = reactive({ list: [] as FollowModel[], count: 0 })
+interface SocialUserItem {
+  id: number
+  nickname: string
+  avatar: string
+  createdAt: string
+}
+
+const follows = reactive({ list: [] as SocialUserItem[], count: 0, page: 1, limit: 10, error: '', loading: false })
+const followers = reactive({ list: [] as SocialUserItem[], count: 0, page: 1, limit: 10, error: '', loading: false })
+const socialLoading = ref(false)
 
 const history = reactive({
   list: [] as ArticleHistoryItem[],
@@ -220,6 +265,20 @@ async function loadProfile(): Promise<void> {
     detail.value = userStore.profile
   } else {
     detail.value = null
+  }
+  await loadFollowState()
+}
+
+async function loadFollowState(): Promise<void> {
+  if (!userStore.isLogin || isSelf.value || !targetID.value) {
+    followed.value = false
+    return
+  }
+  try {
+    const data = await checkFollow(targetID.value)
+    followed.value = data?.followed ?? false
+  } catch {
+    followed.value = false
   }
 }
 
@@ -262,22 +321,95 @@ async function loadCollect(): Promise<void> {
 }
 
 async function loadSocial(): Promise<void> {
+  socialLoading.value = true
+  follows.page = 1
+  followers.page = 1
+  await Promise.all([loadFollows(), loadFollowers()])
+  socialLoading.value = false
+}
+
+async function loadFollows(): Promise<void> {
+  const isFirst = follows.page === 1
+  follows.loading = true
   try {
-    const data = await fetchFollowList({ userID: targetID.value, page: 1, limit: 10 })
-    follows.list = data?.list ?? []
+    const data = await fetchFollowList({ userID: targetID.value, page: follows.page, limit: follows.limit })
+    const items = (data?.list ?? []).map((item) => ({
+      id: item.focusUserID,
+      nickname: item.focusUserNickname,
+      avatar: item.focusUserAvatar,
+      createdAt: item.createdAt,
+    }))
+    follows.list = isFirst ? items : [...follows.list, ...items]
     follows.count = data?.count ?? 0
-  } catch {
-    follows.list = []
-    follows.count = 0
+    follows.error = ''
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '关注列表加载失败'
+    follows.error = message
+    if (isFirst) {
+      follows.list = []
+      follows.count = 0
+    } else {
+      follows.page = Math.max(1, follows.page - 1)
+      ElMessage.warning(message)
+    }
+  } finally {
+    follows.loading = false
   }
+}
+
+async function loadFollowers(): Promise<void> {
+  const isFirst = followers.page === 1
+  followers.loading = true
   try {
-    const data = await fetchFollowerList({ userID: targetID.value, page: 1, limit: 10 })
-    followers.list = data?.list ?? []
+    const data = await fetchFollowerList({ userID: targetID.value, page: followers.page, limit: followers.limit })
+    const items = await hydrateFollowers(data?.list ?? [])
+    followers.list = isFirst ? items : [...followers.list, ...items]
     followers.count = data?.count ?? 0
-  } catch {
-    followers.list = []
-    followers.count = 0
+    followers.error = ''
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '粉丝列表加载失败'
+    followers.error = message
+    if (isFirst) {
+      followers.list = []
+      followers.count = 0
+    } else {
+      followers.page = Math.max(1, followers.page - 1)
+      ElMessage.warning(message)
+    }
+  } finally {
+    followers.loading = false
   }
+}
+
+function loadMoreFollows(): void {
+  follows.page += 1
+  void loadFollows()
+}
+
+function loadMoreFollowers(): void {
+  followers.page += 1
+  void loadFollowers()
+}
+
+// 粉丝列表接口只返回关注记录(不含粉丝的用户信息),这里按需补齐昵称与头像
+async function hydrateFollowers(list: FollowModel[]): Promise<SocialUserItem[]> {
+  const items: SocialUserItem[] = list
+    .filter((item) => item.userID > 0)
+    .map((item) => ({
+      id: item.userID,
+      nickname: '',
+      avatar: '',
+      createdAt: item.createdAt,
+    }))
+  const details = await Promise.allSettled(
+    items.map((item) => fetchUserBaseInfo(item.id, { silent: true })),
+  )
+  details.forEach((result, index) => {
+    if (result.status !== 'fulfilled') return
+    items[index].nickname = result.value?.nickName || ''
+    items[index].avatar = result.value?.avatar || ''
+  })
+  return items
 }
 
 async function loadHistory(): Promise<void> {
@@ -311,6 +443,21 @@ function onTabChange(name: string | number): void {
   if (tab === 'history') void loadHistory()
 }
 
+function switchTab(name: string): void {
+  if (activeTab.value !== name) {
+    activeTab.value = name
+    if (route.query.tab !== name) {
+      void router.replace({ query: { ...route.query, tab: name } })
+    }
+  }
+  onTabChange(name)
+}
+
+function goUser(id: number): void {
+  if (!id) return
+  router.push({ name: 'user-home', params: { id } })
+}
+
 function openFolder(folder: CollectModel): void {
   router.push({ name: 'collections', query: { folder: String(folder.id), user: String(targetID.value) } })
 }
@@ -337,14 +484,16 @@ async function onFollow(): Promise<void> {
     if (followed.value) {
       await unfollowUser(targetID.value)
       followed.value = false
+      if (info.value) info.value.followCount = Math.max(0, (info.value.followCount || 0) - 1)
       ElMessage.success('已取消关注')
     } else {
       await followUser(targetID.value)
       followed.value = true
+      if (info.value) info.value.followCount = (info.value.followCount || 0) + 1
       ElMessage.success('关注成功')
     }
-  } catch {
-    ElMessage.warning('关注接口当前不可用(后端未注册该路由)')
+  } catch (error) {
+    ElMessage.warning(error instanceof Error ? error.message : '关注操作失败')
   } finally {
     followLoading.value = false
   }
@@ -353,8 +502,11 @@ async function onFollow(): Promise<void> {
 watch(targetID, () => {
   articles.page = 1
   history.page = 1
+  follows.page = 1
+  followers.page = 1
+  followed.value = false
   void loadProfile()
-  void loadArticles()
+  onTabChange(activeTab.value)
 })
 
 onMounted(() => {
@@ -437,8 +589,29 @@ onMounted(() => {
 .profile-card__stat {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.profile-card__stat:hover {
+  transform: translateY(-2px);
+}
+
+.profile-card__stat:hover .profile-card__stat-value {
+  filter: brightness(1.2) drop-shadow(0 0 8px rgba(34, 211, 238, 0.6));
+}
+
+.profile-card__stat:hover .sd-dim {
+  color: var(--sd-cyan);
 }
 
 .profile-card__stat-value {
@@ -542,8 +715,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 0;
+  width: 100%;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-body__social-item:hover {
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--sd-cyan);
+}
+
+.profile-body__social-more {
+  margin-top: 8px;
 }
 
 .history-item {

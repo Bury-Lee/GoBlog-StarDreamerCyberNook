@@ -20,7 +20,7 @@ type LogListRequest struct {
 	LogType     enum.LogType  `form:"logType"`
 	Level       enum.LogLevel `form:"level"`
 	IP          string        `form:"ip"`
-	LoginStatus bool          `form:"loginStatus"`
+	LoginStatus *bool         `form:"loginStatus"` // 指针:false(登录失败)也要能作为筛选条件
 	ServiceName string        `form:"serviceName"`
 	UserID      uint          `form:"userID"`
 }
@@ -40,16 +40,23 @@ func (LogApi) LogListView(c *gin.Context) {
 	}
 
 	req.PageInfo.Order = "created_at desc"
+
+	//登录状态是布尔零值,必须用 Where 显式查询,结构体查询会把 false 当"未传参"
+	var query = global.DB.Where("")
+	if req.LoginStatus != nil {
+		query = query.Where("login_status = ?", *req.LoginStatus)
+	}
+
 	list, count, err := common.ListQuery[models.LogModel](models.LogModel{
 		UserID:      req.UserID,
 		LogType:     req.LogType,
 		Level:       req.Level,
 		IP:          req.IP,
-		LoginStatus: req.LoginStatus,
 		ServiceName: req.ServiceName,
 	}, common.Options{
 		PageInfo:      req.PageInfo,
 		Likes:         []string{"Title"},
+		Where:         query,
 		Preloads:      []string{"UserModel"},
 		AllowedOrders: []string{"id", "created_at"},
 	})

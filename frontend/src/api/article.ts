@@ -4,6 +4,7 @@ import type {
   ArticleCreatePayload,
   ArticleDetailResponse,
   ArticleHistoryItem,
+  ArticleInteraction,
   ArticleListQuery,
   ArticleListResponse,
   ArticleLookPayload,
@@ -41,6 +42,10 @@ export function fetchArticleList(params: ArticleListQuery): Promise<ListData<Art
 
 export function fetchArticleDetail(id: number): Promise<ArticleDetailResponse> {
   return http.get<ArticleDetailResponse>(`/article/${id}`)
+}
+
+export function fetchArticleInteraction(id: number): Promise<ArticleInteraction> {
+  return http.get<ArticleInteraction>(`/article/interaction/${id}`, undefined, { silent: true })
 }
 
 export function searchArticles(params: ArticleSearchQuery): Promise<ListData<ArticleSearchListResponse>> {

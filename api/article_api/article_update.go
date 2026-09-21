@@ -4,6 +4,7 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/models/enum"
 	"StarDreamerCyberNook/service/ai_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
@@ -173,14 +174,15 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 }
 
 type ArticleUpdateRequest2 struct {
-	ID          uint      `json:"id" binding:"required"`
-	Title       *string   `json:"title"`
-	Abstract    *string   `json:"abstract"` //要考虑一个问题,如果用户想设置为空简介,那么就设为"该文章未设置简介"
-	Content     *string   `json:"content"`
-	CategoryID  *uint     `json:"categoryID"`
-	TagList     *[]string `json:"tagList"`
-	Cover       *string   `json:"cover"`
-	OpenComment *bool     `json:"openComment"`
+	ID          uint           `json:"id" binding:"required"`
+	Title       *string        `json:"title"`
+	Abstract    *string        `json:"abstract"` //要考虑一个问题,如果用户想设置为空简介,那么就设为"该文章未设置简介"
+	Content     *string        `json:"content"`
+	CategoryID  *uint          `json:"categoryID"`
+	TagList     *[]string      `json:"tagList"`
+	Cover       *string        `json:"cover"`
+	OpenComment *bool          `json:"openComment"`
+	Status      *models.Status `json:"status"` //显式修改状态:存草稿(0)或提交审核(1)
 }
 
 // ArticleUpdateView2 增量更新文章
@@ -321,6 +323,26 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 				mps["status"] = models.StatusPending
 			}
 		}
+	}
+
+	//显式状态变更:普通用户只能存草稿或提交审核,管理员可以设置为任意合法状态
+	//放在AI审核之后,保证用户"存草稿/提交审核"的意图不会被AI结果覆盖
+	if req.Status != nil {
+		st := *req.Status
+		if st < models.StatusDraft || st > models.StatusOffline {
+			response.FailWithMsg("非法的文章状态", c)
+			return
+		}
+		if user.Role != enum.AdminRole {
+			if st != models.StatusDraft && st != models.StatusPending {
+				response.FailWithMsg("非法的文章状态", c)
+				return
+			}
+			if st == models.StatusPending && !global.Config.Site.Article.EnableExamination {
+				st = models.StatusPublished
+			}
+		}
+		mps["status"] = st
 	}
 
 	err = global.DB.Model(&article).Updates(mps).Error

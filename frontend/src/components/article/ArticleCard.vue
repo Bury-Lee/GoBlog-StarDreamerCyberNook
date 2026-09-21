@@ -19,19 +19,23 @@
 
       <div class="article-card__tags">
         <span v-if="article.categoryTitle" class="sd-tag sd-tag--purple">{{ article.categoryTitle }}</span>
-        <span v-for="tag in tags" :key="tag" class="sd-tag" @click.stop="goTag(tag)"># {{ tag }}</span>
+        <span v-for="tag in tags" :key="tag" class="sd-tag article-card__tag" @click.stop="goTag(tag)"># {{ tag }}</span>
       </div>
 
       <div class="article-card__meta">
-        <div class="article-card__author">
+        <router-link
+          class="article-card__author"
+          :to="{ name: 'user-home', params: { id: article.userID } }"
+          @click.stop
+        >
           <UserAvatar :src="authorAvatar" :name="authorName" :size="24" />
-          <span class="sd-ellipsis">{{ authorName }}</span>
-        </div>
+          <span class="article-card__author-name sd-ellipsis">{{ authorName }}</span>
+        </router-link>
         <div class="article-card__stats">
-          <span><el-icon><View /></el-icon>{{ formatNumber(article.lookCount) }}</span>
-          <span><el-icon><Pointer /></el-icon>{{ formatNumber(article.diggCount) }}</span>
-          <span><el-icon><ChatDotRound /></el-icon>{{ formatNumber(article.commentCount) }}</span>
-          <span><el-icon><Star /></el-icon>{{ formatNumber(article.collectCount) }}</span>
+          <span title="浏览"><el-icon><View /></el-icon>{{ formatNumber(article.lookCount) }}</span>
+          <span title="点赞"><el-icon><Pointer /></el-icon>{{ formatNumber(article.diggCount) }}</span>
+          <span title="评论"><el-icon><ChatDotRound /></el-icon>{{ formatNumber(article.commentCount) }}</span>
+          <span title="收藏"><el-icon><Star /></el-icon>{{ formatNumber(article.collectCount) }}</span>
           <span class="article-card__date sd-dim">{{ fromNow(article.createdAt) }}</span>
         </div>
       </div>
@@ -216,6 +220,10 @@ function goTag(tag: string): void {
   gap: 6px;
 }
 
+.article-card__tag {
+  cursor: pointer;
+}
+
 .article-card__meta {
   display: flex;
   align-items: center;
@@ -234,6 +242,11 @@ function goTag(tag: string): void {
   gap: 6px;
   max-width: 40%;
   color: var(--sd-text-muted);
+  cursor: pointer;
+}
+
+.article-card__author:hover .article-card__author-name {
+  color: var(--sd-cyan);
 }
 
 .article-card__stats {
@@ -249,13 +262,7 @@ function goTag(tag: string): void {
 }
 
 .article-card__date {
-  display: none;
-}
-
-@media (min-width: 1500px) {
-  .article-card__date {
-    display: inline;
-  }
+  color: var(--sd-text-dim);
 }
 
 @media (max-width: 640px) {

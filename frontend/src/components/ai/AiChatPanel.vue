@@ -41,10 +41,10 @@
         resize="none"
         maxlength="2000"
         placeholder="输入你的问题,Enter 发送 / Shift + Enter 换行"
-        @keydown.enter.exact.prevent="send"
+        @keydown.enter.exact="onEnter"
       />
       <div class="ai-panel__actions">
-        <span class="sd-dim">{{ messages.length }} 轮对话</span>
+        <span class="sd-dim">{{ roundCount }} 轮对话</span>
         <div>
           <el-button text :disabled="!messages.length || loading" @click="clear">清空</el-button>
           <el-button type="primary" :loading="loading" :disabled="!input.trim()" @click="send">
@@ -57,9 +57,9 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock, MagicStick } from '@element-plus/icons-vue'
 import { askAi } from '@/api/chat'
 import type { AiMessage } from '@/api/types'
@@ -76,6 +76,8 @@ const input = ref('')
 const loading = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 
+const roundCount = computed(() => messages.value.filter((item) => item.role === 'user').length)
+
 function render(content: string): string {
   return renderMarkdown(content)
 }
@@ -90,8 +92,19 @@ function goLogin(): void {
   router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
 }
 
-function clear(): void {
+async function clear(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认清空当前对话吗?清空后无法恢复', '清空对话', { type: 'warning' })
+  } catch {
+    return
+  }
   messages.value = []
+}
+
+function onEnter(event: KeyboardEvent): void {
+  if (event.isComposing) return
+  event.preventDefault()
+  void send()
 }
 
 async function send(): Promise<void> {
@@ -113,10 +126,8 @@ async function send(): Promise<void> {
     if (result?.success && result.content) {
       messages.value.push({ role: 'assistant', content: result.content })
     } else {
-      messages.value.push({
-        role: 'assistant',
-        content: result?.error || 'AI 暂时没有返回内容,请稍后再试',
-      })
+      if (result?.error) console.warn('AI 回复失败:', result.error)
+      messages.value.push({ role: 'assistant', content: 'AI 暂时无法回答,请稍后再试' })
     }
   } catch {
     messages.value.push({ role: 'assistant', content: 'AI 服务暂时不可用,请稍后再试' })

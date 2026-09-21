@@ -98,6 +98,13 @@ function goArticle(id: number): void {
 
 async function removeOne(row: ArticleHistoryItem): Promise<void> {
   try {
+    await ElMessageBox.confirm(`确认删除「${row.title}」这条浏览记录吗?`, '删除记录', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  try {
     await removeArticleHistory([row.id])
     ElMessage.success('删除成功')
     await load()

@@ -27,7 +27,6 @@ export function formatNumber(value?: number | null): string {
   const num = Number(value || 0)
   if (num >= 100000000) return `${(num / 100000000).toFixed(1)}亿`
   if (num >= 10000) return `${(num / 10000).toFixed(1)}万`
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
   return String(num)
 }
 
@@ -104,13 +103,13 @@ export function logTypeLabel(type?: number | null): string {
 }
 
 export const LOG_LEVEL_OPTIONS = [
-  { label: 'Info', value: 1, type: 'info' as const },
-  { label: 'Warn', value: 2, type: 'warning' as const },
-  { label: 'Error', value: 3, type: 'danger' as const },
+  { label: '信息', value: 1, type: 'info' as const },
+  { label: '警告', value: 2, type: 'warning' as const },
+  { label: '错误', value: 3, type: 'danger' as const },
 ]
 
 export function logLevelLabel(level?: number | null): string {
-  return LOG_LEVEL_OPTIONS.find((item) => item.value === level)?.label || 'Info'
+  return LOG_LEVEL_OPTIONS.find((item) => item.value === level)?.label || '信息'
 }
 
 export function logLevelType(level?: number | null): 'info' | 'warning' | 'danger' {

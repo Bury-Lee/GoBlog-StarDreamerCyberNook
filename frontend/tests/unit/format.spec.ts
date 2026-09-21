@@ -16,10 +16,11 @@ import {
 } from '@/utils/format'
 
 describe('formatNumber', () => {
-  it('按千 / 万 / 亿分级', () => {
+  it('按万 / 亿分级,千位不缩写', () => {
     expect(formatNumber(0)).toBe('0')
     expect(formatNumber(999)).toBe('999')
-    expect(formatNumber(1500)).toBe('1.5k')
+    expect(formatNumber(1500)).toBe('1500')
+    expect(formatNumber(9999)).toBe('9999')
     expect(formatNumber(12000)).toBe('1.2万')
     expect(formatNumber(230000000)).toBe('2.3亿')
   })
@@ -75,7 +76,7 @@ describe('枚举文案', () => {
 
   it('日志类型 / 级别 / 角色', () => {
     expect(logTypeLabel(3)).toBe('运行时日志')
-    expect(logLevelLabel(2)).toBe('Warn')
+    expect(logLevelLabel(2)).toBe('警告')
     expect(roleLabel(1)).toBe('管理员')
     expect(roleLabel(6)).toBe('封禁用户')
   })

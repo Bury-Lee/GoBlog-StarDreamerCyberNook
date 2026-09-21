@@ -27,7 +27,7 @@
                     <span class="detail-view__author-info">
                       <span class="detail-view__author-name">{{ article.nickname || article.username }}</span>
                       <span class="sd-dim detail-view__author-time">
-                        发布于 {{ formatDate(article.createdAt) }} · 更新于 {{ fromNow(article.updatedAt) }}
+                        发布于 {{ formatDate(article.createdAt) }} · 更新于 {{ formatDate(article.updatedAt) }}
                       </span>
                     </span>
                   </router-link>
@@ -86,14 +86,20 @@
                   class="detail-view__action"
                   :class="{ 'is-active': digged }"
                   round
+                  :loading="diggLoading"
                   @click="onDigg"
                 >
                   <el-icon><Pointer /></el-icon>
                   {{ digged ? '已点赞' : '点赞' }} {{ formatNumber(article.diggCount) }}
                 </el-button>
-                <el-button class="detail-view__action" round @click="collectVisible = true">
+                <el-button
+                  class="detail-view__action"
+                  :class="{ 'is-active': collected }"
+                  round
+                  @click="collectVisible = true"
+                >
                   <el-icon><Star /></el-icon>
-                  收藏 {{ formatNumber(article.collectCount) }}
+                  {{ collected ? '已收藏' : '收藏' }} {{ formatNumber(article.collectCount) }}
                 </el-button>
                 <el-button class="detail-view__action" round @click="copyLink">
                   <el-icon><Link /></el-icon>
@@ -145,7 +151,12 @@
               <div class="sd-panel__body detail-view__author-body">
                 <UserAvatar :src="article.userAvatar" :name="article.nickname" :size="54" />
                 <span class="detail-view__author-card-name">{{ article.nickname || article.username }}</span>
-                <p class="sd-dim">作者已发布文章,点击查看主页</p>
+                <router-link
+                  class="sd-link detail-view__author-card-link"
+                  :to="{ name: 'user-home', params: { id: article.userID } }"
+                >
+                  查看 TA 的主页
+                </router-link>
                 <div class="detail-view__author-actions">
                   <el-button size="small" @click="goAuthorHome">访问主页</el-button>
                   <el-button size="small" type="primary" plain @click="goAuthorArticles">
@@ -166,7 +177,12 @@
           </aside>
         </template>
 
-        <EmptyState v-else-if="!loading" text="文章不存在或已被删除" />
+        <div v-else-if="!loading" class="detail-view__empty">
+          <EmptyState text="文章不存在或已被删除" />
+          <el-button type="primary" plain @click="router.push({ name: 'articles' })">
+            返回文章列表
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -180,7 +196,13 @@
           :value="folder.id"
         />
       </el-select>
-      <p class="sd-dim collect-tip">已收藏的文章再次收藏会取消收藏</p>
+      <p class="sd-dim collect-tip">
+        {{
+          collected
+            ? '这篇文章已在收藏夹中:再次选择同一收藏夹会取消收藏,选择其他收藏夹会移动'
+            : '选择要收藏到的收藏夹'
+        }}
+      </p>
       <template #footer>
         <el-button @click="collectVisible = false">取消</el-button>
         <el-button type="primary" :loading="collecting" @click="submitCollect">确认</el-button>
@@ -213,6 +235,7 @@ import {
   collectArticle,
   diggArticle,
   fetchArticleDetail,
+  fetchArticleInteraction,
   fetchCollectFolders,
   removeArticles,
   reportArticleLook,
@@ -220,7 +243,7 @@ import {
 } from '@/api/article'
 import { resolveAssetUrl } from '@/api/request'
 import type { ArticleDetailResponse, CollectModel } from '@/api/types'
-import { articleStatusLabel, formatDate, formatNumber, fromNow, parseAiQuality } from '@/utils/format'
+import { articleStatusLabel, formatDate, formatNumber, parseAiQuality } from '@/utils/format'
 import { copyToClipboard, processArticleHtml, renderMarkdown, type TocItem } from '@/utils/html'
 import { useUserStore } from '@/stores'
 
@@ -231,6 +254,8 @@ const userStore = useUserStore()
 const article = ref<ArticleDetailResponse | null>(null)
 const loading = ref(true)
 const digged = ref(false)
+const collected = ref(false)
+const diggLoading = ref(false)
 const userTop = ref(false)
 const progress = ref(0)
 const toc = ref<TocItem[]>([])
@@ -258,6 +283,9 @@ async function loadArticle(): Promise<void> {
   try {
     const data = await fetchArticleDetail(articleID.value)
     article.value = data
+    digged.value = false
+    collected.value = false
+    void loadInteraction()
     const processed = processArticleHtml(data?.content)
     contentHtml.value = processed.html
     toc.value = processed.toc
@@ -268,6 +296,18 @@ async function loadArticle(): Promise<void> {
     article.value = null
   } finally {
     loading.value = false
+  }
+}
+
+// 点赞/收藏状态与访问者相关,由独立接口查询,不随文章详情缓存返回
+async function loadInteraction(): Promise<void> {
+  if (!userStore.isLogin || !articleID.value) return
+  try {
+    const data = await fetchArticleInteraction(articleID.value)
+    digged.value = Boolean(data?.digged)
+    collected.value = Boolean(data?.collected)
+  } catch {
+    // ignore
   }
 }
 
@@ -295,6 +335,8 @@ async function onDigg(): Promise<void> {
     ElMessage.warning('请先登录后再点赞')
     return
   }
+  if (diggLoading.value) return
+  diggLoading.value = true
   try {
     await diggArticle(articleID.value)
     digged.value = !digged.value
@@ -304,6 +346,8 @@ async function onDigg(): Promise<void> {
     ElMessage.success(digged.value ? '点赞成功' : '已取消点赞')
   } catch {
     // ignore
+  } finally {
+    diggLoading.value = false
   }
 }
 
@@ -325,11 +369,18 @@ async function submitCollect(): Promise<void> {
     return
   }
   collecting.value = true
+  const wasCollected = collected.value
   try {
     await collectArticle({ articleID: articleID.value, collectID: collectID.value })
-    ElMessage.success('操作成功')
     collectVisible.value = false
     await loadArticle()
+    if (!collected.value) {
+      ElMessage.success('已取消收藏')
+    } else if (wasCollected) {
+      ElMessage.success('收藏夹已更新')
+    } else {
+      ElMessage.success('收藏成功')
+    }
   } catch {
     // ignore
   } finally {
@@ -750,6 +801,19 @@ onBeforeUnmount(() => {
 .detail-view__author-card-name {
   font-size: 15px;
   font-weight: 600;
+}
+
+.detail-view__author-card-link {
+  font-size: 12px;
+}
+
+.detail-view__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  grid-column: 1 / -1;
+  padding: 40px 0;
 }
 
 .detail-view__author-actions {

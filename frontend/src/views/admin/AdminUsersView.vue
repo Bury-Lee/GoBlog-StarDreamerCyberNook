@@ -53,7 +53,14 @@
             <div class="admin-users__filters">
               <el-input v-model="logQuery.ip" class="admin-users__search" placeholder="IP" clearable />
               <el-input v-model="logQuery.addr" class="admin-users__search" placeholder="地址" clearable />
-              <el-input v-model="logQuery.userId" class="admin-users__search" placeholder="用户 ID" clearable />
+              <el-input
+                v-model="logQuery.userId"
+                class="admin-users__search"
+                type="number"
+                min="1"
+                placeholder="用户 ID(数字)"
+                clearable
+              />
             </div>
             <el-button type="primary" @click="loadLogs">查询</el-button>
           </header>
@@ -70,7 +77,7 @@
             </el-table-column>
             <el-table-column prop="ip" label="IP" width="150" />
             <el-table-column prop="addr" label="地址" width="160" />
-            <el-table-column prop="userAgent" label="User Agent" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="userAgent" label="客户端标识" min-width="240" show-overflow-tooltip />
             <el-table-column label="登录时间" width="170">
               <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
             </el-table-column>
@@ -118,7 +125,12 @@
           <el-input v-model="editForm.abstract" type="textarea" :rows="3" resize="none" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="editForm.role" class="admin-users__control">
+          <el-select
+            v-model="editForm.role"
+            class="admin-users__control"
+            clearable
+            placeholder="不修改角色"
+          >
             <el-option
               v-for="item in ROLE_OPTIONS"
               :key="item.value"
@@ -126,6 +138,7 @@
               :value="item.value"
             />
           </el-select>
+          <p class="sd-dim admin-users__hint">不选择则保持用户当前角色不变</p>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -163,7 +176,7 @@ const editForm = reactive({
   nickname: '',
   avatar: '',
   abstract: '',
-  role: 4,
+  role: undefined as number | undefined,
 })
 
 const {
@@ -237,7 +250,7 @@ function openEdit(row: UserListItem): void {
   editForm.nickname = row.nickname
   editForm.avatar = row.avatar
   editForm.abstract = row.abstract
-  editForm.role = 4
+  editForm.role = undefined
   editVisible.value = true
 }
 
@@ -307,5 +320,10 @@ onMounted(() => {
 
 .admin-users__control {
   width: 100%;
+}
+
+.admin-users__hint {
+  margin-top: 4px;
+  font-size: 12px;
 }
 </style>

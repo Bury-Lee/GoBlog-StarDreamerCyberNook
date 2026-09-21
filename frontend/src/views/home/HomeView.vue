@@ -36,14 +36,19 @@
       >
         <el-carousel-item v-for="banner in banners" :key="banner.id">
           <a
+            v-if="banner.href"
             class="home-view__banner-item"
-            :href="banner.href || 'javascript:void(0)'"
-            :target="banner.href ? '_blank' : '_self'"
+            :href="banner.href"
+            target="_blank"
             rel="noopener noreferrer"
           >
             <img :src="resolveAssetUrl(banner.cover)" :alt="`banner-${banner.id}`" />
             <span class="home-view__banner-mask" />
           </a>
+          <div v-else class="home-view__banner-item">
+            <img :src="resolveAssetUrl(banner.cover)" :alt="`banner-${banner.id}`" />
+            <span class="home-view__banner-mask" />
+          </div>
         </el-carousel-item>
       </el-carousel>
 
@@ -69,7 +74,10 @@
             </header>
 
             <div v-loading="loading" class="home-view__list">
-              <EmptyState v-if="!loading && !list.length" text="还没有文章,快去发布第一篇吧" />
+              <EmptyState v-if="!loading && !list.length" text="还没有文章,快去发布第一篇吧">
+                <el-button v-if="userStore.isLogin" type="primary" @click="goCreate">写文章</el-button>
+                <el-button v-else type="primary" @click="goLogin">去登录</el-button>
+              </EmptyState>
               <ArticleCard
                 v-for="article in list"
                 :key="article.id"
@@ -138,10 +146,11 @@ import { fetchBanners } from '@/api/ops'
 import { resolveAssetUrl } from '@/api/request'
 import type { Banner } from '@/api/types'
 import { usePagination } from '@/composables/usePagination'
-import { useSiteStore } from '@/stores'
+import { useSiteStore, useUserStore } from '@/stores'
 
 const router = useRouter()
 const siteStore = useSiteStore()
+const userStore = useUserStore()
 
 const keyword = ref('')
 const banners = ref<Banner[]>([])
@@ -197,6 +206,14 @@ function switchOrder(value: string): void {
 
 function goSearch(): void {
   router.push({ name: 'search', query: keyword.value.trim() ? { key: keyword.value.trim() } : {} })
+}
+
+function goCreate(): void {
+  router.push({ name: 'article-create' })
+}
+
+function goLogin(): void {
+  router.push({ name: 'login' })
 }
 
 onMounted(async () => {

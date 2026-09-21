@@ -5,6 +5,8 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/models/enum"
+	jwts "StarDreamerCyberNook/utils/jwts"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,6 +50,19 @@ func (BannerApi) BannerCreateView(c *gin.Context) { //TODO:如果图片不存在
 }
 
 func (BannerApi) BannerListView(c *gin.Context) {
+	//管理员传 all=1 时返回包含隐藏项在内的全部数据,否则隐藏的轮播图在后台会"消失"且无法再启用
+	if c.Query("all") == "1" {
+		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
+			var req common.PageInfo
+			c.ShouldBind(&req)
+			list, count, _ := common.ListQuery(models.BannerModel{}, common.Options{
+				PageInfo:      req,
+				AllowedOrders: []string{"id", "created_at"},
+			})
+			response.OkWithList(list, count, c)
+			return
+		}
+	}
 	//放缓存里,也在缓存查询
 	ctx := context.Background()
 	List, err := global.RedisHotPool.Get(ctx, "banner_list").Result()

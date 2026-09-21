@@ -5,6 +5,8 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/models/enum"
+	jwts "StarDreamerCyberNook/utils/jwts"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -60,9 +62,15 @@ func (FriendApi) FriendLinkListView(c *gin.Context) {
 	var req common.PageInfo
 	c.ShouldBind(&req)
 
-	list, count, _ := common.ListQuery(models.FriendLink{
-		IsShow: true,
-	}, common.Options{
+	//管理员传 all=1 时返回全部数据(含已隐藏),否则隐藏后条目在后台无法再找到
+	model := models.FriendLink{IsShow: true}
+	if c.Query("all") == "1" {
+		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
+			model = models.FriendLink{}
+		}
+	}
+
+	list, count, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
 	})
@@ -118,9 +126,15 @@ func (FriendApi) FriendPromotionListView(c *gin.Context) {
 	var req common.PageInfo
 	c.ShouldBind(&req)
 
-	list, count, _ := common.ListQuery(models.FriendPromotion{
-		IsShow: true,
-	}, common.Options{
+	//管理员传 all=1 时返回全部数据(含已隐藏)
+	model := models.FriendPromotion{IsShow: true}
+	if c.Query("all") == "1" {
+		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
+			model = models.FriendPromotion{}
+		}
+	}
+
+	list, count, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
 	})

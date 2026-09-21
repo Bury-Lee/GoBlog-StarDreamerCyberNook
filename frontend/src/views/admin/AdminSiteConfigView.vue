@@ -1,15 +1,18 @@
 <template>
   <div class="admin-site">
     <el-alert
-      type="warning"
+      type="info"
       :closable="false"
       show-icon
-      title="后端 PUT /api/site/:name 当前处于注释状态,本页仅支持查看配置;如需修改请直接编辑服务端 setting.yaml 后重启服务"
+      title="站点配置当前为只读,如需修改请联系开发者"
     />
 
     <el-tabs v-model="activeTab">
       <el-tab-pane label="站点信息" name="site">
-        <div class="site-grid">
+        <EmptyState v-if="siteError" text="站点配置加载失败,请稍后重试">
+          <el-button size="small" @click="loadSite">重试</el-button>
+        </EmptyState>
+        <div v-else class="site-grid">
           <section class="sd-panel">
             <header class="sd-panel__header">
               <span class="sd-panel__title">基础信息</span>
@@ -68,7 +71,7 @@
                 </el-descriptions-item>
                 <el-descriptions-item label="QQ 登录">
                   <el-tag size="small" :type="site?.login?.QQLogin ? 'success' : 'info'">
-                    {{ site?.login?.QQLogin ? '开启' : '关闭(后端未实现)' }}
+                    {{ site?.login?.QQLogin ? '开启' : '未启用' }}
                   </el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="图形验证码">
@@ -111,9 +114,14 @@
               <el-descriptions-item label="发件邮箱">{{ email.sendEmail }}</el-descriptions-item>
               <el-descriptions-item label="发件昵称">{{ email.sendNickname }}</el-descriptions-item>
               <el-descriptions-item label="授权码">{{ email.authCode }}</el-descriptions-item>
-              <el-descriptions-item label="SSL / TLS">{{ email.SSL }} / {{ email.TLS }}</el-descriptions-item>
+              <el-descriptions-item label="SSL / TLS">
+                {{ boolText(email.SSL) }} / {{ boolText(email.TLS) }}
+              </el-descriptions-item>
             </el-descriptions>
-            <EmptyState v-else text="无权限或未配置" />
+            <EmptyState v-else-if="emailError" text="邮件配置加载失败,请稍后重试">
+              <el-button size="small" @click="loadEmail">重试</el-button>
+            </EmptyState>
+            <EmptyState v-else text="尚未配置邮件服务" />
           </div>
         </section>
       </el-tab-pane>
@@ -129,7 +137,10 @@
               <el-descriptions-item label="AppKey">{{ qq.appKey }}</el-descriptions-item>
               <el-descriptions-item label="回调地址">{{ qq.redirect }}</el-descriptions-item>
             </el-descriptions>
-            <EmptyState v-else text="无权限或未配置" />
+            <EmptyState v-else-if="qqError" text="QQ 互联配置加载失败,请稍后重试">
+              <el-button size="small" @click="loadQQ">重试</el-button>
+            </EmptyState>
+            <EmptyState v-else text="尚未配置 QQ 互联" />
           </div>
         </section>
       </el-tab-pane>
@@ -143,6 +154,7 @@
             <el-descriptions v-if="ai" :column="2" border>
               <el-descriptions-item label="启用 AI">{{ ai.enable ? '是' : '否' }}</el-descriptions-item>
               <el-descriptions-item label="开放对话">{{ ai.chat_enable ? '是' : '否' }}</el-descriptions-item>
+              <el-descriptions-item label="定时自动审核">{{ ai.auto_review ? '是' : '否' }}</el-descriptions-item>
               <el-descriptions-item label="模型">{{ ai.model }}</el-descriptions-item>
               <el-descriptions-item label="接口类型">{{ ai.api_type }}</el-descriptions-item>
               <el-descriptions-item label="服务地址">{{ ai.host }}</el-descriptions-item>
@@ -152,7 +164,10 @@
               <el-descriptions-item label="助手昵称">{{ ai.nickName }}</el-descriptions-item>
               <el-descriptions-item label="平台">{{ ai.platform || '-' }}</el-descriptions-item>
             </el-descriptions>
-            <EmptyState v-else text="无权限或未启用 AI" />
+            <EmptyState v-else-if="aiError" text="AI 配置加载失败,请稍后重试">
+              <el-button size="small" @click="loadAI">重试</el-button>
+            </EmptyState>
+            <EmptyState v-else text="尚未配置 AI 服务" />
           </div>
         </section>
       </el-tab-pane>
@@ -173,28 +188,57 @@ const site = ref<SiteConfig | null>(null)
 const email = ref<EmailConfig | null>(null)
 const qq = ref<QQConfig | null>(null)
 const ai = ref<AIConfig | null>(null)
+const siteError = ref(false)
+const emailError = ref(false)
+const qqError = ref(false)
+const aiError = ref(false)
 
-async function load(): Promise<void> {
+function boolText(value: boolean | undefined): string {
+  return value ? '是' : '否'
+}
+
+async function loadSite(): Promise<void> {
   try {
     site.value = await fetchSiteConfig()
+    siteError.value = false
   } catch {
     site.value = null
+    siteError.value = true
   }
+}
+
+async function loadEmail(): Promise<void> {
   try {
     email.value = await fetchEmailConfig()
+    emailError.value = false
   } catch {
     email.value = null
+    emailError.value = true
   }
+}
+
+async function loadQQ(): Promise<void> {
   try {
     qq.value = await fetchQQConfig()
+    qqError.value = false
   } catch {
     qq.value = null
+    qqError.value = true
   }
+}
+
+async function loadAI(): Promise<void> {
   try {
     ai.value = await fetchAIConfig()
+    aiError.value = false
   } catch {
     ai.value = null
+    aiError.value = true
   }
+}
+
+async function load(): Promise<void> {
+  await Promise.all([loadSite(), loadEmail(), loadQQ(), loadAI()])
 }
 
 onMounted(() => {

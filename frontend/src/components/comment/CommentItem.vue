@@ -1,20 +1,30 @@
 <template>
   <div class="comment-item" :class="{ 'comment-item--child': isChild }">
-    <UserAvatar :src="comment.user?.avatar" :name="comment.user?.nickname" :size="isChild ? 28 : 36" />
+    <router-link
+      class="comment-item__avatar"
+      :to="{ name: 'user-home', params: { id: comment.userID } }"
+    >
+      <UserAvatar :src="comment.user?.avatar" :name="comment.user?.nickname" :size="isChild ? 28 : 36" />
+    </router-link>
     <div class="comment-item__main">
       <div class="comment-item__head">
-        <span class="comment-item__name">{{ comment.user?.nickname || '匿名用户' }}</span>
+        <router-link
+          class="comment-item__name"
+          :to="{ name: 'user-home', params: { id: comment.userID } }"
+        >
+          {{ comment.user?.nickname || '匿名用户' }}
+        </router-link>
         <span class="comment-item__time sd-dim">{{ fromNow(comment.createdAt) }}</span>
       </div>
       <p class="comment-item__content">{{ comment.content }}</p>
       <div class="comment-item__actions">
         <span
           class="comment-item__action"
-          :class="{ 'is-active': comment.diggCount > 0 }"
+          :class="{ 'is-active': comment.digged }"
           @click="emit('digg', comment)"
         >
           <el-icon><Pointer /></el-icon>
-          {{ comment.diggCount > 0 ? comment.diggCount : '点赞' }}
+          {{ comment.diggCount > 0 ? `点赞 ${comment.diggCount}` : '点赞' }}
         </span>
         <span class="comment-item__action" @click="emit('reply', comment)">
           <el-icon><ChatLineRound /></el-icon>
@@ -97,6 +107,16 @@ const canManage = computed(() => {
   font-size: 13px;
   font-weight: 600;
   color: var(--sd-text);
+  transition: color 0.2s ease;
+}
+
+.comment-item__name:hover {
+  color: var(--sd-cyan);
+}
+
+.comment-item__avatar {
+  flex-shrink: 0;
+  line-height: 0;
 }
 
 .comment-item__time {

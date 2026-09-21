@@ -500,6 +500,8 @@ Authorization: Bearer <RefreshToken>
 | `qq` | QQ 登录配置 | 管理员 |
 | `ai` | AI 配置 | 管理员 |
 
+**ai 配置字段**：`enable`（启用 AI）、`chat_enable`（开放对话接口）、`auto_review`（定时任务自动 AI 审核待审核文章）、`model`、`temperature`、`max_tokens`、`host`、`api_type`、`nickName`、`avatar`、`platform`；`ApiKey` 返回时打码为 `******`。
+
 **site 响应示例**：
 ```json
 {
@@ -990,6 +992,47 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 
 - `status`：3=通过（已发布），1=不通过（退回草稿）
 - 审核结果会以系统通知发送给文章作者
+
+---
+
+### 9.11.1 AI 审核文章（单个 / 批量）
+
+**POST /api/article/ai/review**
+
+> 需要管理员权限，且 `ai.enable=true`，否则返回「AI功能未启用」。
+
+**请求体**：
+```json
+{
+  "articleID": 1,
+  "IDList": [2, 3],
+  "limit": 10
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `articleID` | uint | 可选，单个文章 ID |
+| `IDList` | []uint | 可选，批量文章 ID；与 `articleID` 都为空时审核全部待审核文章 |
+| `limit` | int | 批量上限，默认 10，最大 20 |
+
+**响应示例**：
+```json
+{
+  "code": 200,
+  "data": {
+    "list": [
+      { "articleID": 1, "title": "标题", "aiResult": "通过", "status": 2 }
+    ],
+    "count": 1,
+    "total": 1
+  },
+  "message": "成功"
+}
+```
+
+- 判定规则：AI 返回「通过」→ 已发布，「拒绝」→ 退回草稿，其它 → 保持审核中等待人工处理
+- 开启 `ai.auto_review` 后，定时任务会每 10 分钟自动执行同样的批量审核（全部待审核文章），AI 服务不可用时自动跳过
 
 ---
 

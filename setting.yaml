@@ -23,6 +23,7 @@ log:
 ai:
   enable: true             # 是否启用AI功能
   chat_enable: true        # 是否开放AI对话接口(/api/chat),可单独关闭
+  auto_review: false       # 是否启用定时任务自动AI审核(每10分钟把待审核文章全部交给AI,AI服务不可用时自动跳过)
   model:               # AI模型类型 (local: 本地模型)(其实可能目前也仅支持本地模型)
   temperature: 0.7        # AI生成温度参数 
   max_tokens: 1024        # 最大token数量 

@@ -15,10 +15,26 @@
             当前状态:{{ articleStatusLabel(article?.status) }}
           </el-tag>
           <el-button @click="router.back()">返回</el-button>
-          <el-button v-if="isEdit" :loading="saving" @click="save(false)">保存修改</el-button>
-          <el-button v-else type="primary" :loading="saving" @click="save(true)">
-            {{ reviewEnabled ? '提交审核' : '发布文章' }}
-          </el-button>
+          <template v-if="isEdit">
+            <el-button v-if="article?.status !== 0" :loading="saving" @click="save('draft')">
+              转为草稿
+            </el-button>
+            <el-button :loading="saving" @click="save('keep')">保存修改</el-button>
+            <el-button
+              v-if="article?.status === 0"
+              type="primary"
+              :loading="saving"
+              @click="save('publish')"
+            >
+              {{ reviewEnabled ? '提交审核' : '发布文章' }}
+            </el-button>
+          </template>
+          <template v-else>
+            <el-button :loading="saving" @click="save('draft')">存草稿</el-button>
+            <el-button type="primary" :loading="saving" @click="save('publish')">
+              {{ reviewEnabled ? '提交审核' : '发布文章' }}
+            </el-button>
+          </template>
         </div>
       </div>
 
@@ -140,16 +156,14 @@
                 <el-switch v-model="form.openComment" />
               </div>
 
-              <div v-if="!isEdit" class="editor-field">
-                <label class="editor-field__label">保存方式</label>
-                <el-radio-group v-model="form.status">
-                  <el-radio :value="0">保存为草稿</el-radio>
-                  <el-radio :value="1">
-                    {{ reviewEnabled ? '提交审核' : '直接发布' }}
-                  </el-radio>
-                </el-radio-group>
+              <div class="editor-field">
+                <label class="editor-field__label">发布说明</label>
                 <p class="sd-dim editor-field__tip">
-                  {{ reviewEnabled ? '站点已开启审核,提交后需管理员审核通过才会公开' : '站点未开启审核,提交后立即发布' }}
+                  {{
+                    reviewEnabled
+                      ? '站点已开启审核:提交后需管理员审核通过才会公开,草稿不会公开'
+                      : '站点未开启审核:提交后立即公开,草稿不会公开'
+                  }}
                 </p>
               </div>
             </div>
@@ -161,10 +175,10 @@
             </header>
             <div class="sd-panel__body">
               <ul class="editor-tips__list">
-                <li>正文会经过 XSS 过滤,请勿粘贴危险脚本</li>
+                <li>正文会自动清理不安全的代码,正常排版不受影响</li>
                 <li>图片上传后会自动插入到光标所在位置</li>
-                <li>Markdown 模式在保存时会自动转换为 HTML</li>
-                <li>编辑已有文章时默认展示 HTML 源码</li>
+                <li>Markdown 模式在保存时会自动转换为网页格式</li>
+                <li>编辑已有文章时会展示已保存的正文,可直接修改</li>
               </ul>
             </div>
           </section>
@@ -184,14 +198,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Picture, View } from '@element-plus/icons-vue'
 import ImageUploader from '@/components/common/ImageUploader.vue'
 import { createArticle, fetchArticleDetail, fetchCategories, saveCategory, updateArticle } from '@/api/article'
 import { uploadImage } from '@/api/ops'
 import { imageUrl } from '@/api/request'
-import type { ArticleDetailResponse, CategoryListItem } from '@/api/types'
+import type { ArticleDetailResponse, ArticleUpdatePayload, CategoryListItem } from '@/api/types'
 import { articleStatusLabel, articleStatusType } from '@/utils/format'
 import { renderMarkdown, sanitizeHtml } from '@/utils/html'
 import { useSiteStore } from '@/stores'
@@ -218,12 +232,27 @@ const form = reactive({
   tagList: [] as string[],
   cover: '',
   openComment: true,
-  status: 0,
 })
 
 const articleID = computed(() => Number(route.params.id || 0))
 const isEdit = computed(() => articleID.value > 0)
 const reviewEnabled = computed(() => siteStore.reviewEnabled)
+
+//记录进入页面时的表单快照,离开前提示未保存的修改
+const initialSnapshot = ref('')
+const dirty = computed(() => initialSnapshot.value !== '' && snapshot() !== initialSnapshot.value)
+
+function snapshot(): string {
+  return JSON.stringify({
+    title: form.title,
+    abstract: form.abstract,
+    content: form.content,
+    categoryID: form.categoryID ?? 0,
+    tagList: form.tagList,
+    cover: form.cover,
+    openComment: form.openComment,
+  })
+}
 
 const previewHtml = computed(() => {
   if (!form.content) return '<p class="sd-dim">暂无内容</p>'
@@ -336,7 +365,7 @@ function buildContent(): string {
   return mode.value === 'markdown' ? renderMarkdown(form.content) : sanitizeHtml(form.content)
 }
 
-async function save(publish: boolean): Promise<void> {
+async function save(target: 'draft' | 'publish' | 'keep'): Promise<void> {
   if (!form.title.trim()) {
     ElMessage.warning('请输入文章标题')
     return
@@ -346,10 +375,21 @@ async function save(publish: boolean): Promise<void> {
     ElMessage.warning('请输入文章正文')
     return
   }
+  if (isEdit.value && target === 'draft') {
+    try {
+      await ElMessageBox.confirm('转为草稿后文章会从站点下线,确定吗?', '转为草稿', {
+        type: 'warning',
+        confirmButtonText: '转为草稿',
+        cancelButtonText: '取消',
+      })
+    } catch {
+      return
+    }
+  }
   saving.value = true
   try {
     if (isEdit.value) {
-      await updateArticle({
+      const payload: ArticleUpdatePayload = {
         id: articleID.value,
         title: form.title.trim(),
         abstract: form.abstract.trim() || undefined,
@@ -358,9 +398,18 @@ async function save(publish: boolean): Promise<void> {
         tagList: form.tagList,
         cover: form.cover,
         openComment: form.openComment,
-      })
-      ElMessage.success('文章已更新')
-      router.push({ name: 'article-detail', params: { id: articleID.value } })
+      }
+      if (target === 'draft') payload.status = 0
+      if (target === 'publish') payload.status = 1
+      await updateArticle(payload)
+      initialSnapshot.value = snapshot()
+      if (target === 'draft') {
+        ElMessage.success('已转为草稿')
+        router.push({ name: 'my-articles' })
+      } else {
+        ElMessage.success(target === 'publish' ? (reviewEnabled.value ? '已提交审核' : '文章已发布') : '文章已更新')
+        router.push({ name: 'article-detail', params: { id: articleID.value } })
+      }
     } else {
       await createArticle({
         title: form.title.trim(),
@@ -370,9 +419,12 @@ async function save(publish: boolean): Promise<void> {
         tagList: form.tagList,
         cover: form.cover,
         openComment: form.openComment,
-        status: publish ? 1 : 0,
+        status: target === 'publish' ? 1 : 0,
       })
-      ElMessage.success(publish ? (reviewEnabled.value ? '已提交审核' : '文章已发布') : '草稿已保存')
+      initialSnapshot.value = snapshot()
+      ElMessage.success(
+        target === 'publish' ? (reviewEnabled.value ? '已提交审核' : '文章已发布') : '草稿已保存',
+      )
       router.push({ name: 'my-articles' })
     }
   } catch {
@@ -382,8 +434,23 @@ async function save(publish: boolean): Promise<void> {
   }
 }
 
+onBeforeRouteLeave(async () => {
+  if (!dirty.value) return true
+  try {
+    await ElMessageBox.confirm('当前修改尚未保存,确定离开吗?', '离开编辑页', {
+      type: 'warning',
+      confirmButtonText: '离开',
+      cancelButtonText: '继续编辑',
+    })
+    return true
+  } catch {
+    return false
+  }
+})
+
 onMounted(async () => {
   await Promise.all([loadCategories(), loadArticle()])
+  initialSnapshot.value = snapshot()
 })
 </script>
 

@@ -17,6 +17,10 @@ export function fetchFollowList(
   })
 }
 
+export function checkFollow(userID: number): Promise<{ followed: boolean }> {
+  return http.get<{ followed: boolean }>('/user/follow/check', { userID }, { silent: true })
+}
+
 export function fetchFollowerList(
   params: PageParams & { userID?: number },
 ): Promise<ListData<FollowModel>> {
