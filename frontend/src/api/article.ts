@@ -1,5 +1,6 @@
 import { http } from './request'
 import type {
+  ArticleAIReviewResult,
   ArticleCreatePayload,
   ArticleDetailResponse,
   ArticleHistoryItem,
@@ -74,6 +75,14 @@ export function fetchReviewArticles(params?: PageParams & { userID?: number }): 
 
 export function reviewArticle(payload: ArticleReviewPayload): Promise<unknown> {
   return http.post<unknown>(`/article/review/${payload.articleID}`, payload)
+}
+
+export function aiReviewArticles(payload?: {
+  articleID?: number
+  IDList?: number[]
+  limit?: number
+}): Promise<ArticleAIReviewResult> {
+  return http.post<ArticleAIReviewResult>('/article/ai/review', payload ?? {})
 }
 
 export function diggArticle(id: number): Promise<unknown> {

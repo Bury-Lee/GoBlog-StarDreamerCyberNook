@@ -13,6 +13,13 @@ import (
 // 清理超过一个月的浏览记录
 var cleanIng sync.Mutex
 
+const (
+	cleanHistoryBatchSize = 200                //每批清理条数
+	cleanHistorySleep     = 200 * time.Millisecond //每批之间的休眠,降低数据库压力
+)
+
+// SyncCleanHistory 清理超过30天的浏览记录
+// 采用ID游标(id > cursor)分批推进,避免反复从表头扫描导致大表清理越来越慢
 func SyncCleanHistory() {
 	// 尝试加锁，避免 cron 并发执行
 	if !cleanIng.TryLock() {
@@ -32,35 +39,56 @@ func SyncCleanHistory() {
 	//设置最长执行时间,避免数据量过大时长时间占用数据库连接
 	deadline := time.Now().Add(30 * time.Minute)
 
+	var cursor uint   //游标:上一批处理到的最大ID
+	total := 0        //本次清理总数
+	batchIndex := 0   //批次序号
+	logrus.Infof("开始清理超过一个月的浏览记录")
+
 	for {
 		if time.Now().After(deadline) {
-			logrus.Warn("清理浏览记录超时,提前结束")
+			logrus.Warnf("清理浏览记录超时,提前结束,本次已清理 %d 条", total)
 			return
 		}
-		logrus.Infof("开始清理超过一个月的浏览记录")
 
-		// 执行删除（每次最多删除50条）
-		tx := global.DB.
-			Where("created_at < ?", expireTime).
-			Limit(50).
-			Delete(&models.UserArticleHistoryModel{})
+		//按主键游标顺序取一批过期记录,只查主键,避免加载整行数据
+		var batch []models.UserArticleHistoryModel
+		err := global.DB.
+			Select("id").
+			Where("id > ? and created_at < ?", cursor, expireTime).
+			Order("id asc").
+			Limit(cleanHistoryBatchSize).
+			Find(&batch).Error
+		if err != nil {
+			logrus.Errorf("查询待清理浏览记录失败: %v", err)
+			return
+		}
 
+		// 没有更多过期记录,说明已经清理完了
+		if len(batch) == 0 {
+			logrus.Infof("浏览记录清理完成,本次共清理 %d 条", total)
+			return
+		}
+
+		ids := make([]uint, 0, len(batch))
+		for _, item := range batch {
+			ids = append(ids, item.ID)
+		}
+
+		//按主键批量删除,走主键索引
+		tx := global.DB.Delete(&models.UserArticleHistoryModel{}, ids)
 		if tx.Error != nil {
 			logrus.Errorf("清理失败: %v", tx.Error)
 			return
 		}
 
-		affected := tx.RowsAffected
-
-		// 如果本次一条都没删，说明已经清理完了
-		if affected == 0 {
-			logrus.Infof("浏览记录清理完成")
-			return
+		cursor = ids[len(ids)-1]
+		total += int(tx.RowsAffected)
+		batchIndex++
+		if batchIndex%10 == 0 {
+			logrus.Infof("浏览记录清理中,已处理 %d 条,当前游标 %d", total, cursor)
 		}
 
-		// logrus.Infof("本次清理 %d 条记录", affected)
-
 		// 每批之间休眠，避免数据库压力过大
-		time.Sleep(5 * time.Second)
+		time.Sleep(cleanHistorySleep)
 	}
 }

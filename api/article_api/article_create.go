@@ -8,7 +8,9 @@ import (
 	"StarDreamerCyberNook/service/ai_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
+	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -151,6 +153,10 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 		response.FailWithMsg("文章创建失败", c)
 		return
 	}
+
+	//清理可能存在的负缓存:SQLite等数据库删除最新文章后会复用ID,
+	//新文章可能命中上一条"文章不存在"的负缓存,导致作者自己都打不开
+	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(article.ID), 10))
 
 	response.OkWithMsg(fmt.Sprintf("文章创建成功,当前状态:%s", req.Stats.String()), c)
 }

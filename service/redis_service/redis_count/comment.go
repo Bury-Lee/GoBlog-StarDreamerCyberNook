@@ -62,8 +62,8 @@ func AckCommentSync(ids []uint, diggMap map[uint]int) {
 
 		// 从diggMap中获取该评论的点赞数变化量
 		if digg := diggMap[id]; digg != 0 {
-			//使用Lua回退增量,避免哈希已过期/被清空时写入负值
-			if err := ackScript.Run(ctx, global.RedisTimeCache, []string{string(commontCacheDigg)}, field, digg).Err(); err != nil {
+			//使用Lua原子回退增量,负数会保留并在下一轮同步中抵消
+			if err := ackScript.Run(ctx, global.RedisTimeCache, []string{string(commontCacheDigg), DirtyCommentSetKey}, field, digg).Err(); err != nil {
 				logrus.Errorf("确认评论同步失败, id: %d, err: %v", id, err)
 				firstErr = err
 			}

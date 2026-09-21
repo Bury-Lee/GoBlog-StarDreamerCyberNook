@@ -126,25 +126,7 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 
 	var list = make([]ArticleListResponse, 0)
 
-	articleIDs := make([]uint, 0, len(_list))
-	idMap := make(map[uint]struct{}, len(_list))
-	for _, item := range _list {
-		if _, ok := idMap[item.ID]; ok {
-			continue
-		}
-		idMap[item.ID] = struct{}{}
-		articleIDs = append(articleIDs, item.ID)
-	}
-	//这样的话性能消耗可能过大,也许停用会好一些,虽然这样就减弱了一致性
-	// collectCountMap := redis_count.GetAllCacheCollect(articleIDs)
-	// lookCountMap := redis_count.GetAllCacheLook(articleIDs)
-	// diggCountMap := redis_count.GetAllCacheDigg(articleIDs)
-
 	for _, model := range _list {
-		// model.Content = ""//前台写个文章预览吧
-		// model.DiggCount += diggCountMap[model.ID]
-		// model.LookCount += lookCountMap[model.ID]
-		// model.CollectCount += collectCountMap[model.ID]
 		data := ArticleListResponse{
 			ArticleModel: model,
 			UserTop:      userTopMap[model.ID],
@@ -157,5 +139,13 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 		}
 		list = append(list, data)
 	}
+
+	//叠加Redis中未同步的计数增量,避免点赞/收藏/评论后要等定时任务回写才看到变化
+	ptrs := make([]*models.ArticleModel, 0, len(list))
+	for i := range list {
+		ptrs = append(ptrs, &list[i].ArticleModel)
+	}
+	applyArticleCountDeltas(ptrs)
+
 	response.OkWithList(list, count, c)
 }

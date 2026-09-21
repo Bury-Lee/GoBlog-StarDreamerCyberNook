@@ -50,15 +50,46 @@ func SetCacheComment(articleID uint, increase bool) {
 // SetCacheCommentBy 按指定增量调整文章评论数缓存
 // 说明:一次删除多条评论(一级评论连同其子评论)时增量不是±1,需要按实际删除数量调整
 func SetCacheCommentBy(articleID uint, delta int) {
-	if delta == 0 {
+	setDirtArticleBy(articleCacheComment, articleID, delta)
+}
+
+// SetCacheCollectBy 按指定增量调整文章收藏数缓存
+// 说明:批量删除收藏记录时增量不是±1,需要按实际删除数量调整
+func SetCacheCollectBy(articleID uint, delta int) {
+	setDirtArticleBy(articleCacheCollect, articleID, delta)
+}
+
+func setDirtArticleBy(t CacheType, articleID uint, delta int) {
+	if delta == 0 || articleID == 0 {
 		return
 	}
 	ctx := context.Background()
 	if err := setDirtScript.Run(ctx, global.RedisTimeCache,
-		[]string{string(articleCacheComment), DirtyArticleSetKey},
+		[]string{string(t), DirtyArticleSetKey},
 		strconv.Itoa(int(articleID)), int64(delta),
 	).Err(); err != nil {
-		logrus.Errorf("更新文章评论数缓存失败, id: %d, delta: %d, err: %v", articleID, delta, err)
+		logrus.Errorf("更新文章计数缓存失败, key: %s, id: %d, delta: %d, err: %v", t, articleID, delta, err)
+	}
+}
+
+// InvalidateArticleDetailCache 删除文章详情/搜索共用的热点缓存
+// 说明:定时任务把Redis增量刷入数据库后,缓存里的旧计数会与数据库不一致,需要失效让下次请求回源
+func InvalidateArticleDetailCache(ids []uint) {
+	if len(ids) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		keys = append(keys, "ArticleID"+strconv.Itoa(int(id)))
+	}
+	if len(keys) == 0 {
+		return
+	}
+	if err := global.RedisHotPool.Del(context.Background(), keys...).Err(); err != nil {
+		logrus.Errorf("清理文章详情缓存失败, count: %d, err: %v", len(keys), err)
 	}
 }
 
@@ -97,8 +128,8 @@ func AckArticleSync(ids []uint, lookMap, diggMap, collectMap, commentMap map[uin
 			if item.delta == 0 {
 				continue
 			}
-			//使用Lua回退增量,避免哈希已过期/被清空时写入负值
-			if err := ackScript.Run(ctx, global.RedisTimeCache, []string{string(item.key)}, field, item.delta).Err(); err != nil {
+			//使用Lua原子回退增量,负数会保留并在下一轮同步中抵消
+			if err := ackScript.Run(ctx, global.RedisTimeCache, []string{string(item.key), DirtyArticleSetKey}, field, item.delta).Err(); err != nil {
 				logrus.Errorf("确认文章同步失败, id: %d, key: %s, err: %v", id, item.key, err)
 				firstErr = err
 			}

@@ -50,6 +50,7 @@ func InitRouter() *gin.Engine {
 	ChatRouter(nr)
 	AIRouter(nr) //已测试完毕
 	FriendRouter(nr)
+	UserFollowRouter(nr) //关注/粉丝/好友
 
 	//硬编码的HTML内容,前端没有处理好时的保底措施
 	r.NoRoute(func(ctx *gin.Context) { //自定义的404页面

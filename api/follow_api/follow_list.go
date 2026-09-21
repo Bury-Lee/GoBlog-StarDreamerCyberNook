@@ -31,11 +31,13 @@ func (FollowApi) FollowUserListView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	var claims = jwts.GetClaims(c)
+	//该路由是公开路由,中间件不会注入claims,需要自己从token头解析
+	claims := jwts.GetClaims(c)
+	if claims == nil {
+		claims, _ = jwts.ParseTokenByGin(c)
+	}
 	if req.UserID == 0 {
-		var err error
-		claims, err = jwts.ParseTokenByGin(c)
-		if err != nil || claims == nil {
+		if claims == nil {
 			response.FailWithMsg("请登录", c)
 			return
 		}
@@ -47,9 +49,12 @@ func (FollowApi) FollowUserListView(c *gin.Context) {
 		response.FailWithMsg("用户配置信息不存在", c)
 		return
 	}
-	if !userConf.OpenFollow && req.UserID != claims.UserID {
-		response.FailWithMsg("此用户未公开我的关注", c)
-		return
+	//匿名访问他人关注列表时claims为nil,必须先判空避免空指针
+	if !userConf.OpenFollow {
+		if claims == nil || claims.UserID != req.UserID {
+			response.FailWithMsg("此用户未公开我的关注", c)
+			return
+		}
 	}
 
 	_list, count, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{

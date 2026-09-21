@@ -51,31 +51,39 @@ func TokenBlack(accessToken string, refreshToken string, blackType BlackType) {
 	//将token加入黑名单,包括access token和refresh token
 	ctx := context.Background()
 	//可能会有的激进做法:把access token也加入黑名单,对于性能消耗可能有点高
-	// AccessTokenkey := fmt.Sprintf("token_black_%s", accessToken)
-	RefreshTokenkey := fmt.Sprintf("token_black_%s", refreshToken)
+	//把access token加入黑名单
+	if accessToken != "" {
+		accessClaim, err := jwts.ParseAccessToken(accessToken)
+		if err != nil || accessClaim == nil {
+			logrus.Errorf("access token解析失败: %v", err)
+		} else {
+			accessSecond := accessClaim.ExpiresAt.Time.Unix() - time.Now().Unix()
+			if accessSecond > 0 {
+				accessKey := fmt.Sprintf("token_black_%s", accessToken)
+				//存int而不是自定义类型,go-redis无法序列化未实现BinaryMarshaler的自定义类型
+				if _, err = global.RedisTimeCache.Set(ctx, accessKey, int(blackType), time.Duration(accessSecond)*time.Second).Result(); err != nil {
+					logrus.Errorf("Redis Set失败: %v", err)
+				}
+			}
+		}
+	}
 
-	// //解析通行token
-	// claim, err := jwts.ParseAccessToken(accessToken)
-	// if err != nil || claim == nil {
-	// 	logrus.Errorf("Token解析失败: %v", err)
-	// 	return
-	// }
-	//解析刷新token
+	//把refresh token加入黑名单
+	if refreshToken == "" {
+		return
+	}
 	refreshClaim, err := jwts.ParseRefreshToken(refreshToken)
 	if err != nil || refreshClaim == nil {
-		logrus.Errorf("Token解析失败: %v", err)
+		logrus.Errorf("refresh token解析失败: %v", err)
 		return
 	}
 	//设置黑名单时间
 	refreshSecond := refreshClaim.ExpiresAt.Time.Unix() - time.Now().Unix()
-	// accessSecond := claim.ExpiresAt.Time.Unix() - time.Now().Unix()
-
-	// res, err := global.RedisTimeCache.Set(ctx, AccessTokenkey, blackType, time.Duration(accessSecond)*time.Second).Result()
-	// if err != nil {
-	// 	logrus.Errorf("Redis Set失败: %s,%v", res, err)
-	// 	return
-	// }
-	res, err := global.RedisTimeCache.Set(ctx, RefreshTokenkey, blackType, time.Duration(refreshSecond)*time.Second).Result()
+	if refreshSecond <= 0 {
+		return
+	}
+	RefreshTokenkey := fmt.Sprintf("token_black_%s", refreshToken)
+	res, err := global.RedisTimeCache.Set(ctx, RefreshTokenkey, int(blackType), time.Duration(refreshSecond)*time.Second).Result()
 	if err != nil {
 		logrus.Errorf("Redis Set失败: %s,%v", res, err)
 		return

@@ -49,8 +49,14 @@ func (ArticleApi) ArticleDiggView(c *gin.Context) {
 		}
 		return
 	}
-	// 取消点赞
-	redis_count.SetCacheDigg(IDRequest.ID, false)
-	global.DB.Delete(&models.ArticleDiggModel{}, "user_id = ? and article_id = ?", claims.UserID, article.ID) //没必要进行错误处理
+	// 取消点赞:按主键删除并确认删除成功后再回退计数,避免删失败时计数仍然-1
+	tx := global.DB.Delete(&userDiggArticle)
+	if tx.Error != nil {
+		response.FailWithMsg("取消点赞失败", c)
+		return
+	}
+	if tx.RowsAffected > 0 {
+		redis_count.SetCacheDigg(IDRequest.ID, false)
+	}
 	response.OkWithMsg("取消点赞成功", c)
 }
