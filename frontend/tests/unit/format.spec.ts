@@ -10,6 +10,7 @@ import {
   logLevelLabel,
   logTypeLabel,
   messageTypeLabel,
+  parseAiQuality,
   roleLabel,
   stripHtml,
 } from '@/utils/format'
@@ -80,8 +81,35 @@ describe('枚举文案', () => {
   })
 })
 
-describe('HTML 文本处理', () => {
-  it('stripHtml 去标签并还原实体', () => {
+describe('parseAiQuality(把后端整段评级文本拆成标签与简评)', () => {
+  it('拆出分数与简评', () => {
+    const raw = '评级:8/10分\n简评:文章详细介绍了 GoTenon 的特性,内容准确、结构清晰。'
+    const result = parseAiQuality(raw)
+    expect(result.score).toBe('8/10')
+    expect(result.comment).toBe('文章详细介绍了 GoTenon 的特性,内容准确、结构清晰。')
+  })
+
+  it('兼容不同写法(冒号/空格/小数)', () => {
+    expect(parseAiQuality('评级：9.5/10分').score).toBe('9.5/10')
+    expect(parseAiQuality('评分 7 / 10').score).toBe('7/10')
+    expect(parseAiQuality('简评：内容偏短。').comment).toBe('内容偏短。')
+  })
+
+  it('短文本直接作为分数标签,长文本没有分数时整体作为简评', () => {
+    expect(parseAiQuality('优秀').score).toBe('优秀')
+    const long = '这篇文章结构完整,但缺少示例代码,建议补充可运行的最小示例以便读者理解。'
+    const result = parseAiQuality(long)
+    expect(result.score).toBe('')
+    expect(result.comment).toBe(long)
+  })
+
+  it('空值返回空结构', () => {
+    expect(parseAiQuality('')).toEqual({ score: '', comment: '' })
+    expect(parseAiQuality(null)).toEqual({ score: '', comment: '' })
+  })
+})
+
+describe('HTML 文本处理', () => {  it('stripHtml 去标签并还原实体', () => {
     expect(stripHtml('<p>你好&nbsp;<b>世界</b></p>')).toBe('你好 世界')
     expect(stripHtml('a &amp; b')).toBe('a & b')
     expect(stripHtml(null)).toBe('')

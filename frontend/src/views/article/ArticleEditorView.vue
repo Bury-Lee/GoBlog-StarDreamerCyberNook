@@ -508,6 +508,20 @@ onMounted(async () => {
   border-radius: 10px;
 }
 
+.editor-main__preview :deep(ul) {
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.editor-main__preview :deep(ol) {
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.editor-main__preview :deep(li) {
+  margin: 3px 0;
+}
+
 .editor-main__preview :deep(a) {
   color: var(--sd-cyan);
 }

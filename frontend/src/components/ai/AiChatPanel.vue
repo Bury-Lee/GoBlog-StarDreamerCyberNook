@@ -203,6 +203,20 @@ async function send(): Promise<void> {
     font-size: 12px;
   }
 
+  :deep(ul) {
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  :deep(ol) {
+    padding-left: 18px;
+    list-style: decimal;
+  }
+
+  :deep(li) {
+    margin: 2px 0;
+  }
+
   :deep(a) {
     color: var(--sd-cyan);
   }
