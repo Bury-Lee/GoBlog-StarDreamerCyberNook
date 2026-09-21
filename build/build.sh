@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # GoBlog (StarDreamerCyberNook) 多平台构建脚本
 # 用法:
-#   ./build.sh                 # 构建 windows/linux/macos (amd64)
+#   ./build.sh                 # 构建 windows/linux/macos (amd64) + 前端
 #   BUILD_ARM64=1 ./build.sh   # 额外构建 linux/macos (arm64)
+#   SKIP_FRONTEND=1 ./build.sh # 跳过前端构建
 #   OUT_DIR=/path ./build.sh   # 自定义输出目录(默认 dist/)
 set -euo pipefail
 
@@ -38,6 +39,18 @@ build darwin  amd64 main_macos_amd64
 if [ "${BUILD_ARM64:-0}" = "1" ]; then
     build linux  arm64 main_linux_arm64
     build darwin arm64 main_macos_arm64
+fi
+
+if [ "${SKIP_FRONTEND:-0}" != "1" ]; then
+    echo "==> 构建前端"
+    (
+        cd "$ROOT_DIR/frontend"
+        npm install --no-audit --no-fund
+        npm run build
+    )
+    rm -rf "$OUT_DIR/web"
+    mkdir -p "$OUT_DIR/web"
+    cp -r "$ROOT_DIR/frontend/dist/." "$OUT_DIR/web/"
 fi
 
 echo

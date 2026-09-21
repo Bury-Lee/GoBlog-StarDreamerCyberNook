@@ -1,8 +1,9 @@
 @echo off
 rem GoBlog (StarDreamerCyberNook) multi-platform build script
 rem Usage:
-rem   build.bat                     Build windows/linux/macos (amd64)
+rem   build.bat                     Build windows/linux/macos (amd64) + frontend
 rem   set BUILD_ARM64=1 && build.bat   Also build linux/macos (arm64)
+rem   set SKIP_FRONTEND=1 && build.bat Skip frontend build
 rem   set OUT_DIR=D:\path && build.bat  Custom output dir (default dist\)
 setlocal
 
@@ -55,6 +56,21 @@ if "%BUILD_ARM64%"=="1" (
 )
 
 popd
+
+if "%SKIP_FRONTEND%"=="1" goto :skip_frontend
+
+echo ==^> build frontend
+pushd "%ROOT_DIR%\frontend"
+call npm install --no-audit --no-fund
+call npm run build
+if errorlevel 1 goto :error
+popd
+
+if exist "%OUT_DIR%\web" rmdir /s /q "%OUT_DIR%\web"
+mkdir "%OUT_DIR%\web"
+xcopy "%ROOT_DIR%\frontend\dist" "%OUT_DIR%\web" /e /i /y >nul
+
+:skip_frontend
 echo.
 echo Build finished, output dir: %OUT_DIR%
 dir /b "%OUT_DIR%"

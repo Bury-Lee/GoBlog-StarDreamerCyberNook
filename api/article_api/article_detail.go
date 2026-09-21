@@ -24,25 +24,6 @@ type ArticleDetailResponse struct {
 	UserName      string  `json:"username"`
 	NickName      string  `json:"nickname"`
 	UserAvatar    string  `json:"userAvatar"`
-	IsCollect     bool    `json:"isCollect"` // 当前登录用户是否已收藏(按用户动态计算,不写缓存)
-	Digged        bool    `json:"digged"`    // 当前登录用户是否已点赞(按用户动态计算,不写缓存)
-}
-
-// 查询用户对于当前文章的收藏和点赞状态,并将该状态写入响应中
-func applyUserInteraction(claims *jwts.MyClaims, articleID uint, resp *ArticleDetailResponse) {
-	if claims == nil || claims.UserID == 0 {
-		return
-	}
-	var count int64
-	global.DB.Model(&models.ArticleDiggModel{}).
-		Where("user_id = ? and article_id = ?", claims.UserID, articleID).
-		Count(&count)
-	resp.Digged = count > 0
-	count = 0
-	global.DB.Model(&models.UserArticleCollectModel{}).
-		Where("user_id = ? and article_id = ?", claims.UserID, articleID).
-		Count(&count)
-	resp.IsCollect = count > 0
 }
 
 func (ArticleApi) ArticleDetailView(c *gin.Context) {
@@ -79,9 +60,7 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 
 		// 计数只在响应阶段叠加,不写回详情缓存
 		result := cached
-		//叠加脏计数,同时获取文章收藏/点赞状态
 		applyArticleCountDeltas([]*models.ArticleModel{&result.ArticleModel})
-		applyUserInteraction(claims, req.ID, &result)
 
 		response.OkWithData(result, c)
 		return
@@ -123,7 +102,6 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 	// 计数只在响应阶段叠加,不写回详情缓存
 	result := cached
 	applyArticleCountDeltas([]*models.ArticleModel{&result.ArticleModel})
-	applyUserInteraction(claims, req.ID, &result)
 
 	response.OkWithData(result, c)
 
