@@ -14,6 +14,7 @@ func ArticleRouter(r *gin.RouterGroup) {
 	r.PUT("/article/inc", middleware.AuthMiddleware, app.ArticleUpdateView2) //增量更新文章//待测
 	r.GET("/article", app.ArticleListView)                                   //获取文章列表 //待测
 	r.GET("/article/search", app.ArticleSearchView)                          //搜索文章//待测
+	r.GET("/article/interaction/:id", middleware.AuthMiddleware, app.ArticleInteractionView) //当前用户对文章的点赞/收藏状态
 	r.GET("/article/:id", app.ArticleDetailView)                             //获取文章详情//待测
 
 	r.POST("/article/top/:id", middleware.AuthMiddleware, app.ArticleTopView)              //置顶文章

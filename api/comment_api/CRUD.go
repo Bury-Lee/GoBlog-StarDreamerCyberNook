@@ -179,6 +179,36 @@ Score: digg_count (点赞数) 或者 timestamp (如果是按时间排序)
 ZSET 非常轻量，只存 ID 和分数。
 更新点赞数时，只需 ZINCRBY，不需要移动整个对象。
 */
+
+// CommentListResponse 评论列表响应:在评论本体之外补充子评论数量
+// 前端需要 childCount 来决定是否显示"查看回复"
+type CommentListResponse struct {
+	models.CommentModel
+	ChildCount int64 `json:"childCount"` // 子评论数量
+}
+
+// getChildCountMap 批量统计每条评论的子评论数量,避免逐条查询
+func getChildCountMap(ids []uint) map[uint]int64 {
+	result := make(map[uint]int64)
+	if len(ids) == 0 {
+		return result
+	}
+	type countRow struct {
+		RootParentID uint
+		Total        int64
+	}
+	var rows []countRow
+	global.DB.Model(&models.CommentModel{}).
+		Select("root_parent_id, count(*) as total").
+		Where("root_parent_id in ?", ids).
+		Group("root_parent_id").
+		Scan(&rows)
+	for _, row := range rows {
+		result[row.RootParentID] = row.Total
+	}
+	return result
+}
+
 func (CommentApi) CommentListlView(c *gin.Context) { //获取某文章的一级评论(分页)
 	//TODO:redis缓存
 	var req CommentDetailRequest
@@ -219,17 +249,26 @@ func (CommentApi) CommentListlView(c *gin.Context) { //获取某文章的一级�
 		List[i].UserModel = UserModel
 	}
 	//叠加Redis里的点赞增量,否则点赞后要等10分钟定时任务回写才看得到变化
-	if len(List) > 0 {
-		ids := make([]uint, 0, len(List))
-		for _, v := range List {
-			ids = append(ids, v.ID)
-		}
+	ids := make([]uint, 0, len(List))
+	for _, v := range List {
+		ids = append(ids, v.ID)
+	}
+	if len(ids) > 0 {
 		diggMap := redis_count.GetAllCacheCommentDigg(ids)
 		for i := range List {
 			List[i].DiggCount += diggMap[List[i].ID]
 		}
 	}
-	response.OkWithList(List, count, c)
+	//补充子评论数,前端据此决定是否显示"查看回复"
+	childCountMap := getChildCountMap(ids)
+	result := make([]CommentListResponse, 0, len(List))
+	for i := range List {
+		result = append(result, CommentListResponse{
+			CommentModel: List[i],
+			ChildCount:   childCountMap[List[i].ID],
+		})
+	}
+	response.OkWithList(result, count, c)
 }
 
 // 分页获取某条评论下的子评论详情(多条)
@@ -295,16 +334,17 @@ func (CommentApi) CommentChildListView(c *gin.Context) { //可以这样,评论�
 		List[i].UserModel = UserModel
 	}
 	//叠加Redis里的点赞增量,否则点赞后要等10分钟定时任务回写才看得到变化
-	if len(List) > 0 {
-		ids := make([]uint, 0, len(List))
-		for _, v := range List {
-			ids = append(ids, v.ID)
-		}
+	ids := make([]uint, 0, len(List))
+	for _, v := range List {
+		ids = append(ids, v.ID)
+	}
+	if len(ids) > 0 {
 		diggMap := redis_count.GetAllCacheCommentDigg(ids)
 		for i := range List {
 			List[i].DiggCount += diggMap[List[i].ID]
 		}
 	}
+	//子评论的点赞状态由 /comment/interaction 单独查询
 	response.OkWithList(List, count, c)
 }
 

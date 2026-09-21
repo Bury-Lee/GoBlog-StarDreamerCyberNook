@@ -46,6 +46,9 @@ func Cron() {
 		crontab.AddFunc("0 */10 * * * *", SyncCleanHistory) //10分钟尝试清理一次浏览记录
 	}
 
+	//每分钟把待审核文章交给AI审核(由运行时配置 ai.auto_review 控制),错开文章/评论同步的秒点
+	crontab.AddFunc("0 3-59/1 * * * *", SyncAIReview) //定时自动AI审核
+
 	// 每天凌晨4:30对账一次,通过以关系表为基准修正文章计数的漂移
 	// crontab.AddFunc("0 30 4 * * *", ReconcileArticleCount)
 

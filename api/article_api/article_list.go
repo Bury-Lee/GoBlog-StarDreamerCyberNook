@@ -17,10 +17,10 @@ import (
 
 type ArticleListRequest struct {
 	common.PageInfo
-	Type       string        `form:"type" binding:"required"`
-	UserID     uint          `form:"userID"`
-	CategoryID *uint         `form:"categoryID"`
-	Status     models.Status `form:"status"`
+	Type       string         `form:"type" binding:"required"`
+	UserID     uint           `form:"userID"`
+	CategoryID *uint          `form:"categoryID"`
+	Status     *models.Status `form:"status"` // 用指针区分"不筛选"和"筛选草稿(status=0)"
 }
 
 type ArticleListResponse struct {
@@ -73,7 +73,8 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 		// 	response.FailWithMsg("查询更多，请登录", c)
 		// 	return
 		// }
-		req.Status = models.StatusPublished // 查别人只能查已发布的
+		published := models.StatusPublished
+		req.Status = &published // 查别人只能查已发布的
 	case "self":
 		// 查自己的
 		claims, err := jwts.ParseTokenByGin(c)
@@ -117,11 +118,14 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 	if len(TopArticleIDList) > 0 {
 		options.DefaultOrder = fmt.Sprintf("%s, created_at desc", sql.ConvertSliceOrderSql(TopArticleIDList))
 	}
+	//状态必须用 Where 显式查询:结构体查询会忽略零值,草稿(status=0)会被当作"不筛选"
+	if req.Status != nil {
+		options.Where = global.DB.Where("status = ?", *req.Status)
+	}
 
 	_list, count, _ := common.ListQuery(models.ArticleModel{
 		UserID:     req.UserID,
 		CategoryID: req.CategoryID,
-		Status:     req.Status,
 	}, options)
 
 	var list = make([]ArticleListResponse, 0)

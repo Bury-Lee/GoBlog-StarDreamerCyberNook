@@ -51,6 +51,30 @@ func (FollowApi) FollowUserView(c *gin.Context) {
 	response.OkWithMsg("关注成功", c)
 }
 
+// FollowCheckView 查询当前登录用户是否已关注指定用户,用于主页按钮的初始状态
+func (FollowApi) FollowCheckView(c *gin.Context) {
+	var req struct {
+		UserID uint `form:"userID" binding:"required"`
+	}
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.FailWithMsg("参数错误", c)
+		return
+	}
+	claims := jwts.GetClaims(c)
+	if claims == nil {
+		response.FailWithMsg("请登录", c)
+		return
+	}
+	var count int64
+	if err := global.DB.Model(&models.UserFollowModel{}).
+		Where("user_id = ? and focus_user_id = ?", claims.UserID, req.UserID).
+		Count(&count).Error; err != nil {
+		response.FailWithMsg("查询关注状态失败", c)
+		return
+	}
+	response.OkWithData(gin.H{"followed": count > 0}, c)
+}
+
 // UnFollowUserView 登录人取关用户
 func (FollowApi) UnFollowUserView(c *gin.Context) {
 	var req FollowUserRequest

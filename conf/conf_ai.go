@@ -5,6 +5,8 @@ type AI struct { //AI模型配置
 
 	ChatEnable bool `yaml:"chat_enable" json:"chat_enable"` // 是否开放AI对话接口,单独控制,关闭后 /api/chat 不可用
 
+	AutoReview bool `yaml:"auto_review" json:"auto_review"` // 是否启用定时任务自动AI审核(将待审核文章全部交给AI,AI服务不可用时自动跳过)
+
 	Model       string  `yaml:"model" json:"model"`             // AI模型名称,为local时使用本地模型
 	Temperature float32 `yaml:"temperature" json:"temperature"` // 温度参数，控制生成文本的随机性
 	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`   // 最大生成令牌数
