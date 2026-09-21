@@ -13,7 +13,7 @@ import type {
   RemoveRequest,
 } from './types'
 
-export function fetchBanners(params?: PageParams): Promise<ListData<Banner>> {
+export function fetchBanners(params?: PageParams & { all?: number }): Promise<ListData<Banner>> {
   return http.get<ListData<Banner>>('/banner', params as Record<string, unknown>)
 }
 
@@ -38,7 +38,7 @@ export interface FriendLinkPayload {
   remark?: string
 }
 
-export function fetchFriendLinks(params?: PageParams): Promise<ListData<FriendLink>> {
+export function fetchFriendLinks(params?: PageParams & { all?: number }): Promise<ListData<FriendLink>> {
   return http.get<ListData<FriendLink>>('/friendLink', params as Record<string, unknown>)
 }
 
@@ -68,7 +68,9 @@ export interface FriendPromotionPayload {
   remark?: string
 }
 
-export function fetchFriendPromotions(params?: PageParams): Promise<ListData<FriendPromotion>> {
+export function fetchFriendPromotions(
+  params?: PageParams & { all?: number },
+): Promise<ListData<FriendPromotion>> {
   return http.get<ListData<FriendPromotion>>('/friendPromotion', params as Record<string, unknown>)
 }
 

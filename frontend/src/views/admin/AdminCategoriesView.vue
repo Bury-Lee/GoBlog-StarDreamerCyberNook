@@ -1,7 +1,7 @@
 <template>
   <CrudPanel
     title="分类管理"
-    description="管理员可查看全站分类,新建与修改共用同一接口(id = 0 为新建)"
+    description="全站文章分类一览,点击「文章数」可查看该分类下的文章"
     :columns="columns"
     :fields="fields"
     :list-fn="listCategories"
@@ -13,14 +13,24 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import CrudPanel, { type CrudColumn, type CrudField } from '@/components/admin/CrudPanel.vue'
 import { fetchCategories, removeCategories, saveCategory } from '@/api/article'
 import type { ListData, PageParams } from '@/api/types'
 
+const router = useRouter()
+
 const columns: CrudColumn[] = [
   { prop: 'id', label: 'ID', width: 70 },
   { prop: 'title', label: '分类名称', minWidth: 160 },
-  { prop: 'articleCount', label: '文章数', width: 100 },
+  {
+    prop: 'articleCount',
+    label: '文章数',
+    width: 100,
+    onClick: (row) => {
+      void router.push({ name: 'admin-articles', query: { categoryID: String(row.id) } })
+    },
+  },
   { prop: 'userID', label: '归属用户', width: 100 },
   { prop: 'nickname', label: '用户昵称', width: 140 },
   { prop: 'createdAt', label: '创建时间', type: 'date', width: 170 },

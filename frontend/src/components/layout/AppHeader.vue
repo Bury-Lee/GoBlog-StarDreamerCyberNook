@@ -73,8 +73,41 @@
           <el-button text @click="goLogin">登录</el-button>
           <el-button type="primary" @click="goRegister">注册</el-button>
         </template>
+
+        <el-button class="app-header__icon-btn app-header__menu-btn" circle @click="menuOpen = true">
+          <el-icon><Menu /></el-icon>
+        </el-button>
       </div>
     </div>
+
+    <el-drawer v-model="menuOpen" title="导航" size="80%" append-to-body>
+      <div class="app-header__drawer-nav">
+        <router-link
+          v-for="item in navItems"
+          :key="item.name"
+          :to="{ name: item.name }"
+          class="app-header__drawer-link"
+          :class="{ 'is-active': isActive(item.name) }"
+          @click="menuOpen = false"
+        >
+          {{ item.label }}
+        </router-link>
+      </div>
+      <div class="app-header__drawer-search">
+        <el-input
+          v-model="keyword"
+          class="app-header__drawer-search-input"
+          placeholder="搜索文章 / 标签"
+          clearable
+          @keyup.enter="goSearchFromMenu"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button type="primary" @click="goSearchFromMenu">搜索</el-button>
+      </div>
+    </el-drawer>
   </header>
 </template>
 
@@ -88,6 +121,7 @@ import {
   Clock,
   Document,
   EditPen,
+  Menu,
   Monitor,
   Platform,
   Search,
@@ -107,6 +141,7 @@ const messageStore = useMessageStore()
 
 const keyword = ref('')
 const logoFailed = ref(false)
+const menuOpen = ref(false)
 
 const navItems = computed(() => {
   const items = [
@@ -127,6 +162,11 @@ function isActive(name: string): boolean {
 function goSearch(): void {
   const key = keyword.value.trim()
   router.push({ name: 'search', query: key ? { key } : {} })
+}
+
+function goSearchFromMenu(): void {
+  goSearch()
+  menuOpen.value = false
 }
 
 function goWrite(): void {
@@ -314,6 +354,40 @@ async function onCommand(command: string): Promise<void> {
   font-size: 13px;
 }
 
+.app-header__menu-btn {
+  display: none;
+}
+
+.app-header__drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.app-header__drawer-link {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  color: var(--sd-text-muted);
+  background: rgba(30, 43, 69, 0.35);
+  transition: all 0.2s ease;
+}
+
+.app-header__drawer-link.is-active {
+  color: var(--sd-cyan);
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.app-header__drawer-search {
+  display: flex;
+  gap: 8px;
+}
+
+.app-header__drawer-search-input {
+  flex: 1;
+}
+
 @media (max-width: 1180px) {
   .app-header__search {
     display: none;
@@ -324,6 +398,10 @@ async function onCommand(command: string): Promise<void> {
   .app-header__nav,
   .app-header__user-name {
     display: none;
+  }
+
+  .app-header__menu-btn {
+    display: inline-flex;
   }
 
   .app-header__inner {

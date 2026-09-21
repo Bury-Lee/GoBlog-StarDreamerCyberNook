@@ -216,6 +216,11 @@ export interface ArticleDetailResponse extends ArticleModel {
   userAvatar: string
 }
 
+export interface ArticleInteraction {
+  digged: boolean
+  collected: boolean
+}
+
 export interface ArticleCreatePayload {
   title: string
   abstract?: string
@@ -236,6 +241,7 @@ export interface ArticleUpdatePayload {
   tagList?: string[] | null
   cover?: string | null
   openComment?: boolean | null
+  status?: number | null
 }
 
 export interface ArticleListQuery extends PageParams {
@@ -331,6 +337,8 @@ export interface CommentModel extends BaseModel {
   path: string
   rootParentID: number | null
   diggCount: number
+  digged?: boolean
+  childCount?: number
 }
 
 export interface CommentCreatePayload {
@@ -595,6 +603,7 @@ export interface QQConfig {
 export interface AIConfig {
   enable: boolean
   chat_enable: boolean
+  auto_review: boolean
   model: string
   temperature: number
   max_tokens: number

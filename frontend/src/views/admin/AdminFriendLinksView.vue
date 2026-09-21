@@ -1,18 +1,20 @@
 <template>
   <CrudPanel
     title="友情链接"
-    description="首页与关于页展示的友链,仅显示 is_show = true 的条目"
+    description="首页与关于页展示的友链,关闭显示的条目不会出现在前台"
     :columns="columns"
     :fields="fields"
-    :list-fn="fetchFriendLinks"
+    :list-fn="listFriendLinks"
     :create-fn="createFriendLink"
     :update-fn="updateFriendLink"
     :remove-fn="removeFriendLinks"
     :default-form="defaultForm"
+    :on-toggle="toggleFriendLink"
   />
 </template>
 
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import CrudPanel, { type CrudColumn, type CrudField } from '@/components/admin/CrudPanel.vue'
 import {
   createFriendLink,
@@ -20,6 +22,7 @@ import {
   removeFriendLinks,
   updateFriendLink,
 } from '@/api/ops'
+import type { FriendLink, ListData, PageParams } from '@/api/types'
 
 const columns: CrudColumn[] = [
   { prop: 'id', label: 'ID', width: 70 },
@@ -39,6 +42,22 @@ const fields: CrudField[] = [
   { prop: 'is_show', label: '是否显示', type: 'switch', default: true },
   { prop: 'remark', label: '备注', type: 'textarea' },
 ]
+
+function listFriendLinks(params: PageParams): Promise<ListData<FriendLink>> {
+  return fetchFriendLinks({ ...params, all: 1 })
+}
+
+async function toggleFriendLink(row: Record<string, any>, value: boolean): Promise<void> {
+  await updateFriendLink(Number(row.id), {
+    name: String(row.name || ''),
+    url: String(row.url || ''),
+    logo: String(row.logo || ''),
+    is_show: value,
+    sort_order: Number(row.sort_order || 0),
+    remark: String(row.remark || ''),
+  })
+  ElMessage.success(value ? '已显示' : '已隐藏')
+}
 
 function defaultForm(): Record<string, unknown> {
   return { is_show: true, sort_order: 0 }

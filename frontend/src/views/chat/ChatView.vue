@@ -23,7 +23,7 @@
               </el-badge>
               <div class="chat-side__text">
                 <span class="chat-side__name sd-ellipsis">
-                  {{ peerInfo(session.peerID).nickname || `用户 ${session.peerID}` }}
+                  {{ peerLabel(session.peerID) }}
                 </span>
                 <span class="sd-dim chat-side__time">{{ fromNow(session.lastMessageTime) }}</span>
               </div>
@@ -34,7 +34,7 @@
         <main class="sd-panel chat-main">
           <header class="sd-panel__header">
             <span class="sd-panel__title">
-              {{ peerID ? peerInfo(peerID).nickname || `用户 ${peerID}` : '选择会话开始聊天' }}
+              {{ peerID ? peerLabel(peerID) : '选择会话开始聊天' }}
             </span>
             <div v-if="peerID" class="chat-main__peer">
               <el-button text size="small" @click="goPeerHome">查看主页</el-button>
@@ -44,6 +44,11 @@
           <div ref="scrollRef" v-loading="messageLoading" class="chat-main__body">
             <EmptyState v-if="!peerID" text="从左侧选择一个会话" />
             <EmptyState v-else-if="!messages.length && !messageLoading" text="还没有聊天记录,打个招呼吧" />
+            <div v-if="peerID && hasMore" class="chat-main__earlier">
+              <el-button text size="small" :loading="loadingEarlier" @click="loadEarlier">
+                加载更早的消息
+              </el-button>
+            </div>
             <div
               v-for="message in messages"
               :key="message.id"
@@ -150,22 +155,33 @@ const asMarkdown = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const peerCache = ref<Record<number, { nickname: string; avatar: string }>>({})
+const peerStatus = ref<Record<number, 'loading' | 'error'>>({})
+const historyPage = ref(1)
+const hasMore = ref(false)
+const loadingEarlier = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function peerInfo(id: number): { nickname: string; avatar: string } {
   return peerCache.value[id] || { nickname: '', avatar: '' }
 }
 
+function peerLabel(id: number): string {
+  const nickname = peerInfo(id).nickname
+  if (nickname) return nickname
+  return peerStatus.value[id] === 'error' ? '未知用户' : '加载中…'
+}
+
 async function ensurePeerInfo(id: number): Promise<void> {
   if (!id || peerCache.value[id]) return
+  peerStatus.value = { ...peerStatus.value, [id]: 'loading' }
   try {
     const data = await fetchUserBaseInfo(id)
     peerCache.value = {
       ...peerCache.value,
-      [id]: { nickname: data?.nickName || `用户 ${id}`, avatar: data?.avatar || '' },
+      [id]: { nickname: data?.nickName || '未知用户', avatar: data?.avatar || '' },
     }
   } catch {
-    peerCache.value = { ...peerCache.value, [id]: { nickname: `用户 ${id}`, avatar: '' } }
+    peerStatus.value = { ...peerStatus.value, [id]: 'error' }
   }
 }
 
@@ -191,13 +207,48 @@ async function loadMessages(silent = false): Promise<void> {
   if (!silent) messageLoading.value = true
   try {
     const data = await fetchChatHistory({ userID: peerID.value, page: 1, limit: 40 })
-    messages.value = [...(data?.list ?? [])].reverse()
+    const latest = [...(data?.list ?? [])].reverse()
+    if (silent) {
+      const known = new Set(messages.value.map((item) => item.id))
+      const fresh = latest.filter((item) => !known.has(item.id))
+      if (!fresh.length) return
+      messages.value = [...messages.value, ...fresh]
+      hasMore.value = messages.value.length < (data?.count ?? messages.value.length)
+      await nextTick()
+      scrollToBottom()
+      return
+    }
+    messages.value = latest
+    historyPage.value = 1
+    hasMore.value = messages.value.length < (data?.count ?? 0)
     await nextTick()
     scrollToBottom()
   } catch {
     if (!silent) messages.value = []
   } finally {
-    messageLoading.value = false
+    if (!silent) messageLoading.value = false
+  }
+}
+
+async function loadEarlier(): Promise<void> {
+  if (!peerID.value || loadingEarlier.value) return
+  const el = scrollRef.value
+  const prevHeight = el?.scrollHeight ?? 0
+  const prevTop = el?.scrollTop ?? 0
+  loadingEarlier.value = true
+  try {
+    const next = historyPage.value + 1
+    const data = await fetchChatHistory({ userID: peerID.value, page: next, limit: 40 })
+    const older = [...(data?.list ?? [])].reverse()
+    messages.value = [...older, ...messages.value]
+    historyPage.value = next
+    hasMore.value = messages.value.length < (data?.count ?? messages.value.length)
+    await nextTick()
+    if (el) el.scrollTop = el.scrollHeight - prevHeight + prevTop
+  } catch {
+    ElMessage.warning('加载更早的消息失败,请稍后再试')
+  } finally {
+    loadingEarlier.value = false
   }
 }
 
@@ -340,6 +391,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
   background: rgba(7, 11, 20, 0.35);
+}
+
+.chat-main__earlier {
+  display: flex;
+  justify-content: center;
 }
 
 .chat-bubble {

@@ -4,17 +4,23 @@
       <section class="sd-panel settings-panel">
         <el-tabs v-model="activeTab">
           <el-tab-pane label="个人资料" name="profile">
-            <el-form :model="profileForm" label-width="100px" class="settings-form">
+            <el-form
+              ref="profileFormRef"
+              :model="profileForm"
+              :rules="profileRules"
+              label-width="100px"
+              class="settings-form"
+            >
               <el-form-item label="头像">
                 <ImageUploader v-model="profileForm.avatar" :width="120" :height="120" tip="建议使用正方形图片" />
               </el-form-item>
-              <el-form-item label="昵称">
-                <el-input v-model="profileForm.nickName" maxlength="24" show-word-limit placeholder="展示昵称" />
+              <el-form-item label="昵称" prop="nickName">
+                <el-input v-model="profileForm.nickName" maxlength="20" show-word-limit placeholder="展示昵称" />
               </el-form-item>
-              <el-form-item label="年龄">
+              <el-form-item label="年龄" prop="Age">
                 <el-input-number v-model="profileForm.Age" :min="0" :max="150" />
               </el-form-item>
-              <el-form-item label="个人简介">
+              <el-form-item label="个人简介" prop="abstract">
                 <el-input
                   v-model="profileForm.abstract"
                   type="textarea"
@@ -83,10 +89,6 @@
               <el-form-item label="公开粉丝列表">
                 <el-switch v-model="privacyForm.openFans" />
                 <span class="settings-hint sd-dim">关闭后他人无法查看你的粉丝</span>
-              </el-form-item>
-              <el-form-item label="主页样式 ID">
-                <el-input-number v-model="privacyForm.homeStyleID" :min="0" :max="99" />
-                <span class="settings-hint sd-dim">对应前端主题编号,预留字段</span>
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :loading="savingPrivacy" @click="savePrivacy">保存设置</el-button>
@@ -174,7 +176,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import ImageUploader from '@/components/common/ImageUploader.vue'
 import CaptchaField from '@/components/common/CaptchaField.vue'
@@ -188,6 +190,7 @@ const userStore = useUserStore()
 const captcha = useCaptcha('重置邮箱')
 
 const activeTab = ref('profile')
+const profileFormRef = ref<FormInstance>()
 const saving = ref(false)
 const savingPrivacy = ref(false)
 const savingMessage = ref(false)
@@ -208,11 +211,19 @@ const profileForm = reactive({
 
 const contactRows = ref<Array<{ key: string; value: string }>>([])
 
+const profileRules: FormRules = {
+  nickName: [
+    { required: true, message: '昵称不能为空', trigger: 'blur' },
+    { min: 1, max: 20, message: '昵称长度需在 1-20 个字符之间', trigger: 'blur' },
+  ],
+  Age: [{ type: 'number', min: 0, max: 150, message: '年龄需在 0-150 之间', trigger: 'change' }],
+  abstract: [{ max: 200, message: '个人简介最多 200 字', trigger: 'blur' }],
+}
+
 const privacyForm = reactive({
   openCollect: true,
   openFollow: true,
   openFans: true,
-  homeStyleID: 0,
 })
 
 const messageForm = reactive({
@@ -245,7 +256,6 @@ function syncFromProfile(): void {
   privacyForm.openCollect = profile.openCollect
   privacyForm.openFollow = profile.openFollow
   privacyForm.openFans = profile.openFans
-  privacyForm.homeStyleID = profile.homeStyleID || 0
 }
 
 function buildContactInfo(): Record<string, string> {
@@ -286,6 +296,13 @@ function removeContact(index: number): void {
 }
 
 async function saveProfile(): Promise<void> {
+  if (!profileFormRef.value) return
+  try {
+    await profileFormRef.value.validate()
+  } catch {
+    ElMessage.warning('请检查资料填写是否正确')
+    return
+  }
   saving.value = true
   try {
     await userStore.updateProfile({
@@ -311,7 +328,6 @@ async function savePrivacy(): Promise<void> {
       openCollect: privacyForm.openCollect,
       openFollow: privacyForm.openFollow,
       openFans: privacyForm.openFans,
-      homeStyleID: privacyForm.homeStyleID,
     })
     ElMessage.success('隐私设置已保存')
   } catch {

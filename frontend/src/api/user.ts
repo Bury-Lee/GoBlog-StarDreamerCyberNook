@@ -1,4 +1,4 @@
-import { http } from './request'
+import { http, type SdRequestConfig } from './request'
 import { getRefreshToken } from '@/utils/storage'
 import type {
   AdminUserInfoUpdatePayload,
@@ -49,8 +49,8 @@ export function fetchUserDetail(): Promise<UserDetail> {
   return http.get<UserDetail>('/user/detail')
 }
 
-export function fetchUserBaseInfo(id: number): Promise<UserBaseInfo> {
-  return http.get<UserBaseInfo>(`/user/info/${id}`)
+export function fetchUserBaseInfo(id: number, options?: SdRequestConfig): Promise<UserBaseInfo> {
+  return http.get<UserBaseInfo>(`/user/info/${id}`, undefined, options)
 }
 
 export function fetchUserList(params?: PageParams): Promise<ListData<UserListItem>> {

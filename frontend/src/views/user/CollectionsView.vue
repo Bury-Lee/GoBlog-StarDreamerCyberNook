@@ -7,6 +7,7 @@
             <span class="sd-panel__title">收藏夹</span>
             <el-button v-if="isSelf" text size="small" @click="openCreate">
               <el-icon><Plus /></el-icon>
+              新建收藏夹
             </el-button>
           </header>
           <div v-loading="folderLoading" class="collect-side__body">
@@ -56,7 +57,7 @@
           </header>
           <div class="sd-panel__body">
             <div v-loading="articleLoading" class="collect-main__list">
-              <EmptyState v-if="!articleLoading && !articles.length" text="这个收藏夹还是空的" />
+              <EmptyState v-if="!articleLoading && !articles.length" :text="articleError || '这个收藏夹还是空的'" />
               <ArticleCard
                 v-for="item in articles"
                 :key="item.id"
@@ -124,6 +125,7 @@ const folderError = ref('')
 const activeFolderID = ref(0)
 const articles = ref<ArticleModel[]>([])
 const articleLoading = ref(false)
+const articleError = ref('')
 const count = ref(0)
 const page = ref(1)
 const limit = ref(8)
@@ -166,6 +168,7 @@ async function loadFolders(): Promise<void> {
 async function loadArticles(): Promise<void> {
   if (!activeFolderID.value) return
   articleLoading.value = true
+  articleError.value = ''
   try {
     const data = await fetchCollectArticles({
       id: activeFolderID.value,
@@ -175,9 +178,10 @@ async function loadArticles(): Promise<void> {
     })
     articles.value = data?.list ?? []
     count.value = data?.count ?? 0
-  } catch {
+  } catch (error) {
     articles.value = []
     count.value = 0
+    articleError.value = error instanceof Error ? error.message : '收藏内容加载失败'
   } finally {
     articleLoading.value = false
   }
@@ -251,7 +255,11 @@ async function submitFolder(): Promise<void> {
 
 async function removeFolder(folder: CollectModel): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确认删除收藏夹「${folder.title}」?`, '删除收藏夹', { type: 'warning' })
+    await ElMessageBox.confirm(
+      `删除后「${folder.title}」里的收藏记录会一并删除,文章本身不受影响。确认删除吗?`,
+      '删除收藏夹',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    )
   } catch {
     return
   }

@@ -12,6 +12,8 @@
           <el-input
             v-model="userID"
             class="admin-review__search"
+            type="number"
+            min="1"
             placeholder="按作者 ID 筛选"
             clearable
             @keyup.enter="search"
@@ -40,7 +42,10 @@
             </div>
             <p class="review-card__abstract sd-clamp-2">{{ item.abstract || excerpt(item.content, 160) }}</p>
             <div class="review-card__meta">
-              <span class="sd-dim">作者 ID:{{ item.userID }}</span>
+              <span class="review-card__author sd-dim">
+                <UserAvatar :src="authors[item.userID]?.avatar" :name="authors[item.userID]?.nickName" :size="22" />
+                {{ authors[item.userID]?.nickName || '未知用户' }}
+              </span>
               <span class="sd-dim">创建:{{ formatDate(item.createdAt) }}</span>
               <span class="sd-dim">更新:{{ formatDate(item.updatedAt) }}</span>
               <span v-for="tag in item.tagList || []" :key="tag" class="sd-tag"># {{ tag }}</span>
@@ -48,7 +53,13 @@
           </div>
           <div class="review-card__actions">
             <el-button size="small" @click="preview(item)">预览</el-button>
-            <el-button size="small" type="warning" plain :loading="aiReviewing" @click="aiReviewOne(item)">
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              :loading="aiReviewingId === item.id"
+              @click="aiReviewOne(item)"
+            >
               AI 审核
             </el-button>
             <el-button size="small" type="danger" plain @click="openReview(item, 0)">驳回</el-button>
@@ -67,10 +78,11 @@
     </section>
 
     <el-drawer v-model="previewVisible" title="文章预览" size="620px">
-      <div v-if="previewArticle" class="review-preview">
+      <div v-if="previewLoading" v-loading="true" class="review-preview__loading" />
+      <div v-else-if="previewArticle" class="review-preview">
         <h2 class="review-preview__title">{{ previewArticle.title }}</h2>
         <div class="review-preview__meta sd-dim">
-          {{ previewArticle.nickname || previewArticle.username || `用户 #${previewArticle.userID}` }} ·
+          {{ previewArticle.nickname || previewArticle.username || '未知用户' }} ·
           {{ formatDate(previewArticle.createdAt) }}
         </div>
         <p v-if="previewArticle.aiAbstract" class="review-preview__ai">
@@ -78,6 +90,7 @@
         </p>
         <div class="article-content review-preview__content" v-html="previewHtml" />
       </div>
+      <EmptyState v-else text="文章内容加载失败,请关闭后重试" compact />
     </el-drawer>
 
     <el-dialog v-model="reviewVisible" :title="reviewStatus === 2 ? '通过审核' : '驳回文章'" width="480px">
@@ -106,13 +119,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick, Refresh } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import { aiReviewArticles, fetchArticleDetail, fetchReviewArticles, reviewArticle } from '@/api/article'
-import type { ArticleDetailResponse, ArticleModel } from '@/api/types'
+import { fetchUserBaseInfo } from '@/api/user'
+import type { ArticleDetailResponse, ArticleModel, UserBaseInfo } from '@/api/types'
 import {
   articleStatusLabel,
   articleStatusType,
@@ -126,29 +141,61 @@ const userID = ref('')
 const previewVisible = ref(false)
 const previewArticle = ref<ArticleDetailResponse | null>(null)
 const previewHtml = ref('')
+const previewLoading = ref(false)
 const reviewVisible = ref(false)
 const reviewing = ref(false)
 const aiReviewing = ref(false)
+const aiReviewingId = ref(0)
 const reviewMsg = ref('')
 const reviewStatus = ref(2)
 const reviewTarget = ref<ArticleModel | null>(null)
+const authors = ref<Record<number, UserBaseInfo>>({})
 
 const { list, count, page, limit, loading, load, search, changePage, changeLimit } = usePagination(
   (params) => fetchReviewArticles(params),
-  () => ({ userID: userID.value ? Number(userID.value) : undefined }),
+  () => {
+    const uid = Number(userID.value)
+    return { userID: Number.isFinite(uid) && uid > 0 ? uid : undefined }
+  },
   { limit: 10 },
 )
+
+// 审核列表接口不带作者信息,按当前页补齐昵称与头像,失败时显示"未知用户"
+async function loadAuthors(): Promise<void> {
+  const ids = [...new Set(list.value.map((item) => item.userID))].filter(
+    (id) => id > 0 && !authors.value[id],
+  )
+  if (!ids.length) return
+  const results = await Promise.allSettled(ids.map((id) => fetchUserBaseInfo(id, { silent: true })))
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled' && result.value) {
+      authors.value[ids[index]] = result.value
+    }
+  })
+}
+
+async function reload(): Promise<void> {
+  await load()
+  void loadAuthors()
+}
+
+watch(list, () => {
+  void loadAuthors()
+})
 
 async function preview(item: ArticleModel): Promise<void> {
   previewVisible.value = true
   previewArticle.value = null
   previewHtml.value = ''
+  previewLoading.value = true
   try {
     const data = await fetchArticleDetail(item.id)
     previewArticle.value = data
     previewHtml.value = processArticleHtml(data?.content).html
   } catch {
     previewArticle.value = null
+  } finally {
+    previewLoading.value = false
   }
 }
 
@@ -179,11 +226,20 @@ async function submitReview(): Promise<void> {
 }
 
 async function aiReviewAll(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      'AI 批量审核会直接通过或驳回最多 10 篇文章,结果不可撤销,确定继续吗?',
+      'AI 批量审核',
+      { type: 'warning', confirmButtonText: '开始审核', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   aiReviewing.value = true
   try {
     const result = await aiReviewArticles({ limit: 10 })
     ElMessage.success(`AI 审核完成:共 ${result?.total ?? 0} 篇,成功 ${result?.count ?? 0} 篇`)
-    await load()
+    await reload()
   } catch {
     // 错误提示已由请求层处理
   } finally {
@@ -192,20 +248,22 @@ async function aiReviewAll(): Promise<void> {
 }
 
 async function aiReviewOne(item: ArticleModel): Promise<void> {
-  aiReviewing.value = true
+  aiReviewingId.value = item.id
   try {
     const result = await aiReviewArticles({ articleID: item.id })
     const first = result?.list?.[0]
     if (first?.error) {
-      ElMessage.error(`AI 审核失败:${first.error}`)
+      console.warn('AI 审核失败:', first.error)
+      ElMessage.error('AI 审核失败,请稍后重试或改为人工审核')
     } else {
-      ElMessage.success(`AI 审核结果:${first?.aiResult || '已完成'}`)
+      const text = (first?.aiResult || '已完成').replace(/\s+/g, ' ').slice(0, 60)
+      ElMessage.success(`AI 审核完成:${text}`)
     }
-    await load()
+    await reload()
   } catch {
     // 错误提示已由请求层处理
   } finally {
-    aiReviewing.value = false
+    aiReviewingId.value = 0
   }
 }
 </script>
@@ -294,6 +352,16 @@ async function aiReviewOne(item: ArticleModel): Promise<void> {
   gap: 12px;
   margin-top: 10px;
   font-size: 12px;
+}
+
+.review-card__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-preview__loading {
+  min-height: 200px;
 }
 
 .review-card__actions {

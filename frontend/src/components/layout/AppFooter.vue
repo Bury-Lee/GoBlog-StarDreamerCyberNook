@@ -7,8 +7,15 @@
         </div>
         <div class="app-footer__links">
           <router-link class="sd-link" :to="{ name: 'about' }">关于本站</router-link>
-          <a class="sd-link" href="/api/heartbeat" target="_blank" rel="noopener">服务状态</a>
-          <span v-if="siteStore.beian" class="sd-dim">{{ siteStore.beian }}</span>
+          <a
+            v-if="siteStore.beian"
+            class="sd-link sd-dim"
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ siteStore.beian }}
+          </a>
         </div>
       </div>
     </div>

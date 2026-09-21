@@ -24,7 +24,14 @@
       </el-select>
       <el-input v-model="query.ip" class="admin-logs__input" placeholder="IP" clearable />
       <el-input v-model="query.serviceName" class="admin-logs__input" placeholder="服务名" clearable />
-      <el-input v-model="query.userID" class="admin-logs__input" placeholder="用户 ID" clearable />
+      <el-input
+        v-model="query.userID"
+        class="admin-logs__input"
+        type="number"
+        min="1"
+        placeholder="用户 ID(数字)"
+        clearable
+      />
       <el-button type="primary" @click="search">查询</el-button>
       <el-button @click="resetQuery">重置</el-button>
       <el-button type="danger" plain :disabled="!selection.length" @click="removeSelected">
@@ -38,6 +45,7 @@
         :data="list"
         border
         stripe
+        class="admin-logs__rows"
         @selection-change="onSelectionChange"
         @row-click="openDetail"
       >
@@ -96,7 +104,7 @@
           <span class="sd-dim">{{ current.ip }} · {{ current.addr }}</span>
         </div>
         <h4 class="admin-logs__detail-title">{{ current.title }}</h4>
-        <pre class="admin-logs__content">{{ current.content }}</pre>
+        <pre class="admin-logs__content">{{ formatLogContent(current.content) }}</pre>
       </div>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
@@ -138,14 +146,18 @@ const current = ref<LogModel | null>(null)
 
 const { list, count, page, limit, loading, load, search, changePage, changeLimit } = usePagination(
   (params) => fetchLogs(params),
-  () => ({
-    logType: query.logType,
-    level: query.level,
-    loginStatus: query.loginStatus,
-    ip: query.ip || undefined,
-    serviceName: query.serviceName || undefined,
-    userID: query.userID ? Number(query.userID) : undefined,
-  }),
+  () => {
+    const uid = Number(query.userID)
+    return {
+      key: query.key || undefined,
+      logType: query.logType,
+      level: query.level,
+      loginStatus: query.loginStatus,
+      ip: query.ip || undefined,
+      serviceName: query.serviceName || undefined,
+      userID: Number.isFinite(uid) && uid > 0 ? uid : undefined,
+    }
+  },
   { limit: 10 },
 )
 
@@ -154,6 +166,7 @@ function onSelectionChange(rows: LogModel[]): void {
 }
 
 function resetQuery(): void {
+  query.key = ''
   query.logType = undefined
   query.level = undefined
   query.loginStatus = undefined
@@ -163,9 +176,45 @@ function resetQuery(): void {
   search()
 }
 
+// 后端日志 content 是拼接过的 HTML/JSON,直接展示会让管理员看到标签和压缩成一行的 JSON
+function prettyJson(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+function formatLogContent(content?: string | null): string {
+  if (!content) return '暂无内容'
+  let text = content
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    text = text
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(div|p|pre|li|h\d)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+  }
+  text = text
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) return prettyJson(trimmed)
+      return line
+    })
+    .join('\n')
+  return text.replace(/\n{3,}/g, '\n\n').trim()
+}
+
 async function openDetail(row: LogModel): Promise<void> {
   current.value = row
   detailVisible.value = true
+  if (!row.isRead) row.isRead = true
   try {
     await fetchLogDetail(row.id)
   } catch {
@@ -233,6 +282,10 @@ async function removeSelected(): Promise<void> {
 
 .admin-logs__table {
   padding: 18px;
+}
+
+.admin-logs__rows :deep(.el-table__row) {
+  cursor: pointer;
 }
 
 .admin-logs__detail-meta {

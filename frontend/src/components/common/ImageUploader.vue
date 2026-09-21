@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Picture, Upload } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { uploadImage } from '@/api/ops'
@@ -67,14 +67,19 @@ const emit = defineEmits<{
 const uploading = ref(false)
 const manualUrl = ref('')
 
+function toManualValue(value?: string): string {
+  if (value && value.startsWith('/api/image')) return ''
+  return value || ''
+}
+
+function isValidManualUrl(value: string): boolean {
+  return /^https?:\/\/.+/i.test(value) || /^\/(?:api|web)(?:\/.*)?$/.test(value)
+}
+
 watch(
   () => props.modelValue,
   (value) => {
-    if (value && value.startsWith('/api/image')) {
-      manualUrl.value = ''
-    } else {
-      manualUrl.value = value || ''
-    }
+    manualUrl.value = toManualValue(value)
   },
   { immediate: true },
 )
@@ -105,11 +110,27 @@ async function doUpload(options: UploadRequestOptions): Promise<void> {
 
 function applyManual(): void {
   const value = manualUrl.value.trim()
+  if (!value) {
+    if (!props.modelValue) return
+    manualUrl.value = ''
+    emit('update:modelValue', '')
+    return
+  }
+  if (!isValidManualUrl(value)) {
+    ElMessage.warning('图片地址需以 http(s):// 开头,或使用 /api、/web 开头的站内路径')
+    manualUrl.value = toManualValue(props.modelValue)
+    return
+  }
   if (value === props.modelValue) return
   emit('update:modelValue', value)
 }
 
-function clear(): void {
+async function clear(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确认删除这张图片吗?', '删除图片', { type: 'warning' })
+  } catch {
+    return
+  }
   manualUrl.value = ''
   emit('update:modelValue', '')
 }
@@ -153,19 +174,18 @@ function clear(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(7, 11, 20, 0.65);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.image-uploader__preview:hover .image-uploader__mask {
-  opacity: 1;
+  background: transparent;
+  pointer-events: none;
 }
 
 .image-uploader__mask-btn {
   font-size: 20px;
   color: var(--sd-red);
   cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  background: rgba(7, 11, 20, 0.72);
+  pointer-events: auto;
 }
 
 .image-uploader__side {

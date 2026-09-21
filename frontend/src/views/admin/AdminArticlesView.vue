@@ -28,11 +28,16 @@
         <el-input
           v-model="userID"
           class="admin-articles__search"
+          type="number"
+          min="1"
           placeholder="按作者 ID 筛选"
           clearable
           @keyup.enter="search"
           @clear="search"
         />
+        <el-tag v-if="categoryID" closable type="info" @close="clearCategory">
+          已按分类筛选
+        </el-tag>
         <el-select v-model="order" class="admin-articles__select" @change="search">
           <el-option
             v-for="item in ARTICLE_ORDER_OPTIONS"
@@ -50,7 +55,7 @@
     <section class="sd-panel admin-articles__table">
       <el-table
         v-loading="loading"
-        :data="visibleList"
+        :data="list"
         border
         stripe
         @selection-change="onSelectionChange"
@@ -70,7 +75,7 @@
           <template #default="{ row }">
             <div class="admin-articles__author">
               <UserAvatar :src="row.avatar" :name="row.userNickName" :size="26" />
-              <span class="sd-ellipsis">{{ row.userNickName || `#${row.userID}` }}</span>
+              <span class="sd-ellipsis">{{ row.userNickName || '未知用户' }}</span>
             </div>
           </template>
         </el-table-column>
@@ -95,7 +100,12 @@
         <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openReview(row)">审核</el-button>
-            <el-button link type="warning" @click="toggleTop(row)">
+            <el-button
+              link
+              type="warning"
+              :loading="topLoading === row.id"
+              @click="toggleTop(row)"
+            >
               {{ row.userTop ? '取消置顶' : '置顶' }}
             </el-button>
             <el-button
@@ -146,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
@@ -183,30 +193,39 @@ const statusTabs = [
 const status = ref(-1)
 const order = ref('')
 const userID = ref(String(route.query.userID || ''))
+const categoryID = ref<number | undefined>(
+  route.query.categoryID ? Number(route.query.categoryID) : undefined,
+)
 const selection = ref<ArticleListResponse[]>([])
 const reviewVisible = ref(false)
 const reviewing = ref(false)
 const reviewMsg = ref('')
 const reviewTarget = ref<ArticleListResponse | null>(null)
+const topLoading = ref(0)
 
 const { list, count, page, limit, key, loading, load, search, changePage, changeLimit } = usePagination(
   (params) => fetchArticleList(params),
-  () => ({
-    type: 'admin' as const,
-    status: status.value > 0 ? status.value : undefined,
-    userID: userID.value ? Number(userID.value) : undefined,
-    order: order.value || undefined,
-  }),
+  () => {
+    const uid = Number(userID.value)
+    return {
+      type: 'admin' as const,
+      status: status.value >= 0 ? status.value : undefined,
+      userID: Number.isFinite(uid) && uid > 0 ? uid : undefined,
+      categoryID: categoryID.value,
+      order: order.value || undefined,
+    }
+  },
   { limit: 10 },
 )
 
-const visibleList = computed(() => {
-  if (status.value < 0) return list.value
-  return (list.value as ArticleListResponse[]).filter((item) => item.status === status.value)
-})
-
 function switchStatus(value: number): void {
   status.value = value
+  page.value = 1
+  void load()
+}
+
+function clearCategory(): void {
+  categoryID.value = undefined
   page.value = 1
   void load()
 }
@@ -241,6 +260,16 @@ async function submitReview(nextStatus: number): Promise<void> {
 }
 
 async function toggleTop(row: ArticleListResponse): Promise<void> {
+  if (row.userTop) {
+    try {
+      await ElMessageBox.confirm('取消置顶后该文章将回到正常排序,确定吗?', '取消置顶', {
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  topLoading.value = row.id
   try {
     if (row.userTop) {
       await cancelTopArticle(row.id)
@@ -252,6 +281,8 @@ async function toggleTop(row: ArticleListResponse): Promise<void> {
     await load()
   } catch {
     // ignore
+  } finally {
+    topLoading.value = 0
   }
 }
 

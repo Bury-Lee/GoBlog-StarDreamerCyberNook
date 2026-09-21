@@ -25,7 +25,7 @@
         </el-button>
         <el-button type="danger" plain :disabled="!selection.length" @click="removeSelected">
           <el-icon><Delete /></el-icon>
-          批量删除
+          批量删除{{ selection.length ? '(' + selection.length + ')' : '' }}
         </el-button>
       </div>
     </header>
@@ -52,16 +52,22 @@
           <template #default="{ row }">
             <el-image
               v-if="column.type === 'image'"
-              :src="resolveAssetUrl(row[column.prop])"
+              :src="imageSource(row, column)"
               class="crud-panel__image"
               fit="cover"
-              :preview-src-list="row[column.prop] ? [resolveAssetUrl(row[column.prop])] : []"
+              :preview-src-list="imageSource(row, column) ? [imageSource(row, column)] : []"
               preview-teleported
             >
               <template #error>
-                <span class="sd-dim">无图</span>
+                <span class="sd-dim">{{ column.emptyText || '无图' }}</span>
               </template>
             </el-image>
+            <el-switch
+              v-else-if="column.type === 'switch' && hasToggle"
+              :model-value="Boolean(row[column.prop])"
+              :loading="isToggling(row)"
+              @change="(value: boolean | string | number) => handleToggle(row, column, Boolean(value))"
+            />
             <el-tag v-else-if="column.type === 'switch'" :type="row[column.prop] ? 'success' : 'info'" size="small">
               {{ row[column.prop] ? '是' : '否' }}
             </el-tag>
@@ -76,7 +82,13 @@
             <span v-else-if="column.type === 'longtext'" class="sd-clamp-2 crud-panel__longtext">
               {{ column.formatter ? column.formatter(row) : row[column.prop] }}
             </span>
-            <span v-else>{{ column.formatter ? column.formatter(row) : row[column.prop] }}</span>
+            <span
+              v-else
+              :class="{ 'crud-panel__link': !!column.onClick }"
+              @click="column.onClick?.(row)"
+            >
+              {{ column.formatter ? column.formatter(row) : row[column.prop] }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="操作" fixed="right" :width="actionWidth">
@@ -184,6 +196,8 @@ export interface CrudColumn {
   options?: { label: string; value: unknown }[]
   tagType?: (row: Record<string, any>) => string
   formatter?: (row: Record<string, any>) => string
+  onClick?: (row: Record<string, any>) => void
+  emptyText?: string
   showOverflowTooltip?: boolean
 }
 
@@ -210,6 +224,7 @@ const props = withDefaults(
     createFn?: (payload: Record<string, any>) => Promise<unknown>
     updateFn?: (id: number, payload: Record<string, any>) => Promise<unknown>
     removeFn: (ids: number[]) => Promise<unknown>
+    onToggle?: (row: Record<string, any>, value: boolean) => Promise<void>
     searchable?: boolean
     searchPlaceholder?: string
     extraParams?: Record<string, unknown>
@@ -245,8 +260,10 @@ const submitting = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
 const form = reactive<Record<string, any>>({})
+const toggleLoading = ref<Set<number>>(new Set())
 
 const dialogTitle = computed(() => (editingId.value ? `编辑${props.title}` : `新增${props.title}`))
+const hasToggle = computed(() => typeof props.onToggle === 'function')
 
 const rules = computed<FormRules>(() => {
   const result: FormRules = {}
@@ -298,6 +315,37 @@ function changeLimit(next: number): void {
 
 function onSelectionChange(rows: Record<string, any>[]): void {
   selection.value = rows
+}
+
+function imageSource(row: Record<string, any>, column: CrudColumn): string {
+  const value = column.formatter ? column.formatter(row) : row[column.prop]
+  return resolveAssetUrl(String(value || ''))
+}
+
+function isToggling(row: Record<string, any>): boolean {
+  return toggleLoading.value.has(Number(row.id))
+}
+
+async function handleToggle(row: Record<string, any>, column: CrudColumn, value: boolean): Promise<void> {
+  if (!props.onToggle) return
+  const previous = Boolean(row[column.prop])
+  if (previous === value) return
+  row[column.prop] = value
+  const id = Number(row.id)
+  toggleLoading.value.add(id)
+  try {
+    await props.onToggle(row, value)
+  } catch {
+    row[column.prop] = previous
+    ElMessage.error('操作失败,已恢复原状态')
+  } finally {
+    toggleLoading.value.delete(id)
+  }
+}
+
+function describeRow(row: Record<string, any>): string {
+  const label = row.name || row.title
+  return label ? `《${label}》` : `ID ${row.id}`
 }
 
 function resetForm(): void {
@@ -396,7 +444,7 @@ async function submit(): Promise<void> {
 
 async function removeOne(row: Record<string, any>): Promise<void> {
   try {
-    await ElMessageBox.confirm('确认删除该条记录?', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除${describeRow(row)}?`, '删除确认', { type: 'warning' })
   } catch {
     return
   }
@@ -480,6 +528,15 @@ void load()
   font-size: 12px;
   color: var(--sd-text-muted);
   max-width: 320px;
+}
+
+.crud-panel__link {
+  color: var(--sd-cyan);
+  cursor: pointer;
+}
+
+.crud-panel__link:hover {
+  text-decoration: underline;
 }
 
 .crud-panel__control {

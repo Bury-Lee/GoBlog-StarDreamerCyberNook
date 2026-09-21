@@ -34,7 +34,7 @@
           </div>
         </header>
 
-        <el-table v-loading="loading" :data="visibleList" border stripe>
+        <el-table v-loading="loading" :data="list" border stripe>
           <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">
               <router-link class="sd-link" :to="{ name: 'article-detail', params: { id: row.id } }">
@@ -59,7 +59,7 @@
           </el-table-column>
           <el-table-column label="分类" width="120">
             <template #default="{ row }">
-              <span class="sd-dim">{{ row.categoryID ? `#${row.categoryID}` : '未分类' }}</span>
+              <span class="sd-dim">{{ row.categoryTitle || '未分类' }}</span>
             </template>
           </el-table-column>
           <el-table-column label="更新时间" width="160">
@@ -70,7 +70,7 @@
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="goEdit(row.id)">编辑</el-button>
-              <el-button link type="warning" @click="toggleTop(row)">
+              <el-button link type="warning" :loading="topLoading === row.id" @click="toggleTop(row)">
                 {{ row.userTop ? '取消置顶' : '置顶' }}
               </el-button>
               <el-button link type="danger" @click="removeOne(row)">删除</el-button>
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, Search } from '@element-plus/icons-vue'
@@ -112,20 +112,16 @@ const statusTabs = [
 ]
 
 const status = ref(-1)
+const topLoading = ref(0)
 
 const { list, count, page, limit, key, loading, load, search, changePage, changeLimit } = usePagination(
   (params) => fetchArticleList(params),
   () => ({
     type: 'self' as const,
-    status: status.value > 0 ? status.value : undefined,
+    status: status.value >= 0 ? status.value : undefined,
   }),
   { limit: 10 },
 )
-
-const visibleList = computed(() => {
-  if (status.value < 0) return list.value
-  return (list.value as ArticleListResponse[]).filter((item) => item.status === status.value)
-})
 
 function switchStatus(value: number): void {
   status.value = value
@@ -142,6 +138,16 @@ function goEdit(id: number): void {
 }
 
 async function toggleTop(row: ArticleListResponse): Promise<void> {
+  if (row.userTop) {
+    try {
+      await ElMessageBox.confirm('取消置顶后该文章将回到正常排序,确定吗?', '取消置顶', {
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
+  topLoading.value = row.id
   try {
     if (row.userTop) {
       await cancelTopArticle(row.id)
@@ -153,6 +159,8 @@ async function toggleTop(row: ArticleListResponse): Promise<void> {
     await load()
   } catch {
     // ignore
+  } finally {
+    topLoading.value = 0
   }
 }
 

@@ -70,10 +70,13 @@
                 </div>
               </div>
             </CommentItem>
-            <div v-if="!childState[comment.id] && comment.diggCount >= 0" class="comment-section__expand">
+            <div
+              v-if="!childState[comment.id] && (comment.childCount ?? 0) > 0"
+              class="comment-section__expand"
+            >
               <el-button text size="small" @click="loadChildren(comment)">
                 <el-icon><ChatLineRound /></el-icon>
-                查看回复
+                查看回复({{ comment.childCount }})
               </el-button>
             </div>
           </template>
@@ -201,6 +204,9 @@ async function onDigg(comment: CommentModel): Promise<void> {
     const result = await diggComment(comment.id)
     if (typeof result?.diggCount === 'number') {
       comment.diggCount = result.diggCount
+    }
+    if (typeof result?.digged === 'boolean') {
+      comment.digged = result.digged
     }
   } catch {
     // ignore
