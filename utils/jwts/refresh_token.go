@@ -30,7 +30,9 @@ func GetRefreshToken(userID uint) (string, error) {
 		ID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(global.Config.Jwt.RefreshExpire) * time.Hour)),
-			Issuer:    global.Config.Jwt.Issuer,
+			//每次签发使用唯一ID,避免同秒登录生成相同token
+			ID:     newJTI(),
+			Issuer: global.Config.Jwt.Issuer,
 		},
 	})
 	return cla.SignedString([]byte(global.Config.Jwt.RefreshTokenSecret))

@@ -8,10 +8,13 @@ import (
 	"StarDreamerCyberNook/models/enum"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 //TODO:这里迟点再检查了,怕有bug
@@ -66,36 +69,43 @@ func (ChatApi) ChatSendView(c *gin.Context) { //查询会话是否存在,没有�
 		Msg:        req.Msg,
 		MsgType:    msgType,
 	}
-	global.DB.Create(&chatModel)
-
-	//我给别人发了消息,那改变的就应该是别人的会话状态
-	var session = models.SessionModel{
-		UniqueID: fmt.Sprintf("%d_%d", req.RevUserID, claim.UserID),
-	}
-
-	err := global.DB.Where("unique_id = ?", session.UniqueID).First(&session)
-	if session.ID == 0 {
-		response.FailWithMsg("?", c)
+	if err := global.DB.Create(&chatModel).Error; err != nil {
+		response.FailWithMsg("消息发送失败", c)
 		return
 	}
-	if err != nil {
+
+	//我给别人发了消息,那改变的就应该是别人的会话状态
+	uniqueID := fmt.Sprintf("%d_%d", req.RevUserID, claim.UserID)
+	var session models.SessionModel
+	err := global.DB.Where("unique_id = ?", uniqueID).First(&session).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		//首次对话:创建接收方的会话(原实现先判断session.ID导致永远返回失败,无法建立会话)
 		session = models.SessionModel{
-			UniqueID:        fmt.Sprintf("%d_%d", req.RevUserID, claim.UserID),
+			UniqueID:        uniqueID,
 			UserID:          req.RevUserID,
-			LastMessage:     chatModel,
+			LastMessageID:   chatModel.ID,
 			LastMessageTime: time.Now(),
 			IsRead:          false,
 			UnreadCount:     1,
 		}
-		global.DB.Create(&session)
+		if err = global.DB.Create(&session).Error; err != nil {
+			response.FailWithMsg("创建会话失败", c)
+			return
+		}
+	} else if err != nil {
+		response.FailWithMsg("查询会话失败", c)
 		return
 	} else { //更新会话信息
 		session.IsRead = false
 		session.UnreadCount += 1
-		session.LastMessage = chatModel
+		session.LastMessageID = chatModel.ID
 		session.LastMessageTime = time.Now()
-		global.DB.Save(&session)
+		if err = global.DB.Save(&session).Error; err != nil {
+			response.FailWithMsg("更新会话失败", c)
+			return
+		}
 	}
+	response.OkWithMsg("发送成功", c)
 }
 
 type ChatListRequest struct {
@@ -201,34 +211,33 @@ func (ChatApi) ChatListView(c *gin.Context) { // 查自己和指定用户的聊�
 		}
 		list = append(list, item)
 	}
-	response.OkWithList(list, count, c)
-
-	//更新会话信息
-	//TODO:没有对话就要创建一个会话
+	//先更新会话信息再返回响应,避免响应写出后又调用FailWithMsg导致双重响应
 	//查询了就是把消息读取了
-	var session = models.SessionModel{
-		UniqueID: fmt.Sprintf("%d_%d", claims.UserID, req.UserID),
-	}
-
-	err = global.DB.Where("unique_id = ?", session.UniqueID).First(&session).Error
-	if session.ID == 0 {
-		response.FailWithMsg("没有对话记录", c)
-		return
-	}
-	if err != nil {
+	uniqueID := fmt.Sprintf("%d_%d", claims.UserID, req.UserID)
+	var session models.SessionModel
+	err = global.DB.Where("unique_id = ?", uniqueID).First(&session).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		session = models.SessionModel{
-			UniqueID:        fmt.Sprintf("%d_%d", claims.UserID, req.UserID),
+			UniqueID:        uniqueID,
 			UserID:          claims.UserID,
 			LastMessageTime: time.Now(),
 			IsRead:          true,
 			UnreadCount:     0,
 		}
-		global.DB.Create(&session)
+		if err = global.DB.Create(&session).Error; err != nil {
+			logrus.Errorf("创建会话失败: %v", err)
+		}
+	} else if err != nil {
+		logrus.Errorf("查询会话失败: %v", err)
+	} else {
+		session.IsRead = true
+		session.UnreadCount = 0
+		if err = global.DB.Save(&session).Error; err != nil {
+			logrus.Errorf("更新会话失败: %v", err)
+		}
 	}
-	//更新会话信息
-	session.IsRead = true
-	session.UnreadCount = 0
-	global.DB.Save(&session)
+
+	response.OkWithList(list, count, c)
 }
 
 type SessionListRequest struct {

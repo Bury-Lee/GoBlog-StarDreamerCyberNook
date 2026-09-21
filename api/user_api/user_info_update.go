@@ -65,22 +65,25 @@ func (UserApi) UserInfoUpdateView(c *gin.Context) {
 		if req.ContactInfo != nil {
 			content += "\n用户联系方式:" + fmt.Sprintf("%v", *req.ContactInfo)
 		}
-		res, err := ai_service.CreateSingleReply(content, global.SystemPromptUser.String())
-		if err != nil {
-			logrus.Errorf("ai审核失败: %s", err.Error())
-			//出错自动降级为非ai流程
-		}
-		switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
-		case "通过":
-			//通过,更新用户信息
-		case "拒绝":
-			//拒绝,返回错误
-			response.FailWithMsg("存在违规信息,用户信息未更新", c)
-			return
-		default:
-			logrus.Errorf("ai审核结果未知: %s,用户:%+v", res, req)
-			response.FailWithMsg("审核结果未知,用户信息未更新", c) //也许也可以考虑放行?
-			return
+		//只有本次提交包含需要审核的文本内容时才调用AI,避免只改隐私开关也被AI审核拦截
+		if content != "" {
+			res, err := ai_service.CreateSingleReply(content, global.SystemPromptUser.String())
+			if err != nil {
+				logrus.Errorf("ai审核失败: %s", err.Error())
+				//出错自动降级为非ai流程
+			}
+			switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
+			case "通过":
+				//通过,更新用户信息
+			case "拒绝":
+				//拒绝,返回错误
+				response.FailWithMsg("存在违规信息,用户信息未更新", c)
+				return
+			default:
+				logrus.Errorf("ai审核结果未知: %s,用户:%+v", res, req)
+				response.FailWithMsg("审核结果未知,用户信息未更新", c) //也许也可以考虑放行?
+				return
+			}
 		}
 	}
 

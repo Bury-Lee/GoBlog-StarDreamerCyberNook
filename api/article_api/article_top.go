@@ -91,19 +91,14 @@ func (ArticleApi) AdminArticleDeleteView(c *gin.Context) {
 		return
 	}
 
-	//查询是否已经有这篇文章的置顶
-	if global.DB.Where("user_id = ? AND article_id = ?", req.UserID, req.ArticleID).First(&models.UserTopArticleModel{}).Error != nil {
-		response.FailWithMsg("没有相关记录", c)
+	tx := global.DB.Where("user_id = ? AND article_id = ?", req.UserID, req.ArticleID).
+		Delete(&models.UserTopArticleModel{})
+	if tx.Error != nil {
+		response.FailWithMsg("取消置顶失败", c)
 		return
 	}
-	//如果有就删除
-	topModel := models.UserTopArticleModel{
-		UserID:    req.UserID,
-		ArticleID: req.ArticleID,
-	}
-
-	if global.DB.Delete(&topModel).Error != nil {
-		response.FailWithMsg("取消置顶失败", c)
+	if tx.RowsAffected == 0 {
+		response.FailWithMsg("没有相关记录", c)
 		return
 	}
 	response.OkWithMsg("取消置顶成功", c)

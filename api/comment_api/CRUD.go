@@ -44,6 +44,11 @@ func (CommentApi) CommentCreateView(c *gin.Context) {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
+	//文章关闭评论后,后端也必须拦截,不能只依赖前端隐藏输入框
+	if !article.OpenComment {
+		response.FailWithMsg("该文章已关闭评论", c)
+		return
+	}
 	claims := jwts.GetClaims(c)
 
 	//评论内容防xss注入

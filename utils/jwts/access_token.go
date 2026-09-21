@@ -6,6 +6,8 @@ import (
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -15,6 +17,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// newJTI 生成token唯一标识
+// 说明:没有jti时,同一用户在同一秒内多次登录会生成完全相同的token,
+// 导致登出其中一个会话会连带把另一个会话也拉黑,因此每次签发都带上随机jti
+func newJTI() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
 
 // Claims 自定义JWT声明结构体
 // 包含用户的基本身份信息：用户ID、用户名和角色类型

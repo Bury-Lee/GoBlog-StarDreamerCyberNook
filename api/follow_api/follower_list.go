@@ -27,10 +27,10 @@ func (FollowApi) FollowerListView(c *gin.Context) { //迟点检查一下
 	}
 
 	// 2. 获取当前登录用户的身份信息 (JWT Claims)
+	// 无论是否传userID都尝试解析,用于判断访问者是否为本人
+	claim, _ := jwts.ParseTokenByGin(c)
 	// 如果 req.UserID 为 0，表示查询的是当前登录用户自己的粉丝，需要验证登录状态。
-	var claim *jwts.MyClaims
 	if req.UserID == 0 {
-		claim = jwts.GetClaims(c)
 		if claim == nil {
 			response.FailWithMsg("请登录", c)
 			return
@@ -58,9 +58,9 @@ func (FollowApi) FollowerListView(c *gin.Context) { //迟点检查一下
 	}
 
 	// 执行通用列表查询方法
-	// 查询条件是 UserFocusModel 中的 UserID 字段等于目标用户的 ID
+	// 粉丝 = 关注目标用户的记录,条件是focus_user_id等于目标用户ID(原实现用user_id查成了关注列表)
 	list, count, err := common.ListQuery[models.UserFollowModel](
-		models.UserFollowModel{UserID: req.UserID},
+		models.UserFollowModel{FocusUserID: req.UserID},
 		option,
 	)
 
