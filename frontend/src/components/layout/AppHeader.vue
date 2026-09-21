@@ -112,7 +112,6 @@ const navItems = computed(() => {
   const items = [
     { name: 'home', label: '首页' },
     { name: 'articles', label: '文章' },
-    { name: 'ai', label: 'AI 助手' },
     { name: 'about', label: '关于' },
   ]
   return items

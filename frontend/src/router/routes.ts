@@ -88,12 +88,6 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '私聊', requiresAuth: true },
       },
       {
-        path: 'ai',
-        name: 'ai',
-        component: () => import('@/views/ai/AiAssistantView.vue'),
-        meta: { title: 'AI 助手', requiresAuth: true },
-      },
-      {
         path: 'about',
         name: 'about',
         component: () => import('@/views/about/AboutView.vue'),
