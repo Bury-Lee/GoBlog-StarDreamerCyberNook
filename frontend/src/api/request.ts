@@ -5,6 +5,7 @@ import axios, {
 } from 'axios'
 import { ElMessage } from 'element-plus'
 import { clearAuth, getAccessToken, getRefreshToken, setAccessToken } from '@/utils/storage'
+import { isTokenExpired, isTokenExpiring } from '@/utils/jwt'
 import type { ApiResult } from './types'
 
 export const API_BASE = import.meta.env.VITE_API_BASE || '/api'
@@ -30,8 +31,8 @@ const instance = axios.create({
   timeout: 30000,
 })
 
-instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getAccessToken()
+instance.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const token = await resolveAccessToken()
   if (token) {
     config.headers.set('token', token)
   }
@@ -56,6 +57,26 @@ async function requestNewAccessToken(): Promise<string> {
   return payload.data
 }
 
+function refreshAccessTokenOnce(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = requestNewAccessToken().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
+}
+
+async function resolveAccessToken(): Promise<string> {
+  const token = getAccessToken()
+  if (!token) return ''
+  if (!isTokenExpiring(token) || !getRefreshToken()) return token
+  try {
+    return await refreshAccessTokenOnce()
+  } catch {
+    return token
+  }
+}
+
 async function redirectToLogin(): Promise<void> {
   const { default: router } = await import('@/router')
   const current = router.currentRoute.value
@@ -63,32 +84,39 @@ async function redirectToLogin(): Promise<void> {
   router.push({ name: 'login', query: { redirect: current.fullPath } })
 }
 
-async function handleUnauthorized(config: RetriableConfig | undefined, message?: string): Promise<unknown> {
-  const original = config as RetriableConfig | undefined
-  if (original && !original._retry && getRefreshToken()) {
-    try {
-      if (!refreshPromise) {
-        refreshPromise = requestNewAccessToken().finally(() => {
-          refreshPromise = null
-        })
-      }
-      const token = await refreshPromise
-      original._retry = true
-      original.headers.set('token', token)
-      return instance.request(original)
-    } catch {
-      clearAuth()
-      void redirectToLogin()
-      throw new ApiError(401, '登录状态已过期,请重新登录')
-    }
+const AUTH_ERROR_CODES = [201, 401, 422]
+
+interface RetryOutcome {
+  ok: boolean
+  data?: unknown
+}
+
+async function tryRefreshAndRetry(config: RetriableConfig | undefined): Promise<RetryOutcome | null> {
+  if (!config || config._retry) return null
+  if (!getRefreshToken()) return null
+  const token = getAccessToken()
+  if (!token || !isTokenExpired(token)) return null
+  config._retry = true
+  try {
+    const fresh = await refreshAccessTokenOnce()
+    config.headers.set('token', fresh)
+    const data = await instance.request(config)
+    return { ok: true, data }
+  } catch {
+    return { ok: false }
   }
+}
+
+async function handleUnauthorized(config: RetriableConfig | undefined, message?: string): Promise<unknown> {
+  const outcome = await tryRefreshAndRetry(config)
+  if (outcome?.ok) return outcome.data
   clearAuth()
   void redirectToLogin()
-  throw new ApiError(401, message || '请先登录后再操作')
+  throw new ApiError(401, message || '登录状态已过期,请重新登录')
 }
 
 instance.interceptors.response.use(
-  (response) => {
+  async (response) => {
     const payload = response.data as ApiResult<unknown> | string | null
     if (payload === null || payload === undefined || payload === '') {
       return {} as never
@@ -99,23 +127,37 @@ instance.interceptors.response.use(
     if (payload.code === 200) {
       return payload.data as never
     }
-    if (payload.code === 401) {
-      return handleUnauthorized(response.config as RetriableConfig, payload.message) as never
-    }
+
     const config = response.config as RetriableConfig
+    if (AUTH_ERROR_CODES.includes(payload.code)) {
+      const outcome = await tryRefreshAndRetry(config)
+      if (outcome?.ok) return outcome.data as never
+      if (outcome && !outcome.ok) {
+        clearAuth()
+        void redirectToLogin()
+        throw new ApiError(payload.code, payload.message || '登录状态已过期,请重新登录')
+      }
+    }
+
     if (!config.silent) {
       ElMessage.error(payload.message || '请求失败')
     }
     return Promise.reject(new ApiError(payload.code, payload.message || '请求失败'))
   },
-  (error: AxiosError<ApiResult<unknown>>) => {
+  async (error: AxiosError<ApiResult<unknown>>) => {
     const config = error.config as RetriableConfig | undefined
     const status = error.response?.status
     const payload = error.response?.data
     const serverMessage = payload && typeof payload === 'object' ? payload.message : ''
 
-    if (status === 401) {
-      return handleUnauthorized(config, serverMessage) as never
+    if (status && AUTH_ERROR_CODES.includes(status)) {
+      const outcome = await tryRefreshAndRetry(config)
+      if (outcome?.ok) return outcome.data as never
+      if (outcome && !outcome.ok) {
+        clearAuth()
+        void redirectToLogin()
+        throw new ApiError(401, '登录状态已过期,请重新登录')
+      }
     }
 
     let message = serverMessage

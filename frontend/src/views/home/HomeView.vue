@@ -3,14 +3,7 @@
     <section class="home-hero sd-grid-bg">
       <div class="sd-container home-hero__inner">
         <div class="home-hero__text">
-          <span class="sd-chip home-hero__chip">
-            <span class="home-hero__dot" />
-            SIGNAL ONLINE · 服务已连接
-          </span>
           <h1 class="home-hero__title sd-neon-text">{{ siteStore.siteTitle }}</h1>
-          <p class="home-hero__desc">
-            {{ siteStore.seo.description || '技术分享 · 内容社区 · 记录每一次思考' }}
-          </p>
           <div class="home-hero__search">
             <el-input
               v-model="keyword"
@@ -24,10 +17,6 @@
               </template>
             </el-input>
             <el-button type="primary" size="large" @click="goSearch">搜索</el-button>
-          </div>
-          <div v-if="hotTags.length" class="home-hero__tags">
-            <span class="sd-dim">热门标签:</span>
-            <span v-for="tag in hotTags" :key="tag" class="sd-tag" @click="goTag(tag)"># {{ tag }}</span>
           </div>
         </div>
         <div class="home-hero__deco">
@@ -157,7 +146,6 @@ const siteStore = useSiteStore()
 const keyword = ref('')
 const banners = ref<Banner[]>([])
 const order = ref('')
-const hotTags = ref<string[]>([])
 
 const orderTabs = [
   { label: '最新发布', value: '' },
@@ -211,23 +199,12 @@ function goSearch(): void {
   router.push({ name: 'search', query: keyword.value.trim() ? { key: keyword.value.trim() } : {} })
 }
 
-function goTag(tag: string): void {
-  router.push({ name: 'search', query: { tag } })
-}
-
 onMounted(async () => {
   try {
     const data = await fetchBanners({ page: 1, limit: 6 })
     banners.value = data?.list ?? []
   } catch {
     banners.value = []
-  }
-  try {
-    const data = await fetchArticleList({ type: 'other', page: 1, limit: 30, order: 'look_count desc' })
-    const tags = (data?.list ?? []).flatMap((item) => item.tagList || [])
-    hotTags.value = Array.from(new Set(tags)).slice(0, 8)
-  } catch {
-    hotTags.value = []
   }
 })
 </script>
@@ -267,20 +244,6 @@ onMounted(async () => {
   gap: 14px;
 }
 
-.home-hero__chip {
-  width: fit-content;
-  color: #a5f3fc;
-}
-
-.home-hero__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sd-green);
-  box-shadow: 0 0 10px var(--sd-green);
-  animation: sd-pulse 1.8s ease-in-out infinite;
-}
-
 .home-hero__title {
   font-size: 40px;
   font-weight: 800;
@@ -288,27 +251,10 @@ onMounted(async () => {
   line-height: 1.25;
 }
 
-.home-hero__desc {
-  font-size: 15px;
-  color: var(--sd-text-muted);
-}
-
 .home-hero__search {
   display: flex;
   gap: 10px;
   margin-top: 6px;
-}
-
-.home-hero__tags {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-}
-
-.home-hero__tags .sd-tag {
-  cursor: pointer;
 }
 
 .home-hero__deco {

@@ -64,15 +64,19 @@
                 />
               </header>
 
-              <div v-if="article.aiAbstract" class="detail-view__ai">
+              <div v-if="article.aiAbstract || article.aiQuality" class="detail-view__ai">
                 <div class="detail-view__ai-head">
                   <el-icon><MagicStick /></el-icon>
                   <span>AI 摘要</span>
-                  <el-tag v-if="article.aiQuality" size="small" type="success" effect="dark">
-                    质量评级 {{ article.aiQuality }}
+                  <el-tag v-if="aiScore" size="small" type="success" effect="dark">
+                    质量评级 {{ aiScore }}
                   </el-tag>
                 </div>
-                <p>{{ article.aiAbstract }}</p>
+                <div v-if="article.aiAbstract" class="detail-view__ai-text" v-html="aiAbstractHtml" />
+                <div v-if="aiComment" class="detail-view__ai-comment">
+                  <span class="detail-view__ai-comment-label">简评</span>
+                  <div class="detail-view__ai-text" v-html="aiCommentHtml" />
+                </div>
               </div>
 
               <div class="detail-view__content article-content" v-html="contentHtml" />
@@ -216,8 +220,8 @@ import {
 } from '@/api/article'
 import { resolveAssetUrl } from '@/api/request'
 import type { ArticleDetailResponse, CollectModel } from '@/api/types'
-import { articleStatusLabel, formatDate, formatNumber, fromNow } from '@/utils/format'
-import { copyToClipboard, processArticleHtml, type TocItem } from '@/utils/html'
+import { articleStatusLabel, formatDate, formatNumber, fromNow, parseAiQuality } from '@/utils/format'
+import { copyToClipboard, processArticleHtml, renderMarkdown, type TocItem } from '@/utils/html'
 import { useUserStore } from '@/stores'
 
 const route = useRoute()
@@ -240,6 +244,13 @@ let lookTimer: ReturnType<typeof setTimeout> | null = null
 
 const articleID = computed(() => Number(route.params.id))
 const isOwner = computed(() => Boolean(article.value && userStore.userId === article.value.userID))
+
+// 后端 aiQuality 是一整段文本(如 "评级:8/10分\n简评:..."),这里拆成短标签与简评正文
+const aiQualityParts = computed(() => parseAiQuality(article.value?.aiQuality))
+const aiScore = computed(() => aiQualityParts.value.score)
+const aiComment = computed(() => aiQualityParts.value.comment)
+const aiAbstractHtml = computed(() => renderMarkdown(article.value?.aiAbstract || ''))
+const aiCommentHtml = computed(() => renderMarkdown(aiComment.value))
 
 async function loadArticle(): Promise<void> {
   if (!articleID.value) return
@@ -509,15 +520,67 @@ onBeforeUnmount(() => {
   background: linear-gradient(120deg, rgba(168, 85, 247, 0.12), rgba(34, 211, 238, 0.08));
   font-size: 13px;
   color: #ddd6fe;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detail-view__ai-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 6px;
   font-weight: 600;
   color: #e9d5ff;
+}
+
+.detail-view__ai-text {
+  margin-top: 6px;
+  line-height: 1.8;
+  word-break: break-word;
+
+  :deep(p) {
+    margin: 0 0 6px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(ul) {
+    padding-left: 20px;
+    list-style: disc;
+  }
+
+  :deep(ol) {
+    padding-left: 20px;
+    list-style: decimal;
+  }
+
+  :deep(li) {
+    margin: 3px 0;
+  }
+
+  :deep(strong) {
+    color: #f5d0fe;
+  }
+
+  :deep(code) {
+    font-family: var(--sd-font-mono);
+  }
+}
+
+.detail-view__ai-comment {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(168, 85, 247, 0.3);
+}
+
+.detail-view__ai-comment-label {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #f0abfc;
 }
 
 .detail-view__content {
@@ -540,6 +603,22 @@ onBeforeUnmount(() => {
 
 .detail-view__content :deep(p) {
   margin: 12px 0;
+}
+
+.detail-view__content :deep(ul) {
+  margin: 12px 0;
+  padding-left: 22px;
+  list-style: disc;
+}
+
+.detail-view__content :deep(ol) {
+  margin: 12px 0;
+  padding-left: 22px;
+  list-style: decimal;
+}
+
+.detail-view__content :deep(li) {
+  margin: 4px 0;
 }
 
 .detail-view__content :deep(a) {

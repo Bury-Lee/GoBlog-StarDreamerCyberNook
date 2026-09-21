@@ -10,13 +10,8 @@
       <template v-else>
         <div v-if="!messages.length" class="ai-panel__welcome">
           <el-icon :size="30" class="ai-panel__welcome-icon"><MagicStick /></el-icon>
-          <p class="sd-neon-text">我是本站 AI 助手</p>
-          <p class="sd-dim">可以问我技术问题、文章总结、写作思路等</p>
-          <div class="ai-panel__suggests">
-            <span v-for="item in suggests" :key="item" class="sd-chip" @click="quickAsk(item)">
-              {{ item }}
-            </span>
-          </div>
+          <p class="sd-neon-text">AI 助手</p>
+          <p class="sd-dim">在下方输入你的问题开始对话</p>
         </div>
 
         <div
@@ -81,8 +76,6 @@ const input = ref('')
 const loading = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 
-const suggests = ['帮我总结一篇文章的要点', 'Go 语言的并发模型怎么理解?', '给我一个技术博客选题']
-
 function render(content: string): string {
   return renderMarkdown(content)
 }
@@ -95,11 +88,6 @@ async function scrollToBottom(): Promise<void> {
 
 function goLogin(): void {
   router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
-}
-
-function quickAsk(text: string): void {
-  input.value = text
-  void send()
 }
 
 function clear(): void {
@@ -174,23 +162,6 @@ async function send(): Promise<void> {
   animation: sd-float 3s ease-in-out infinite;
 }
 
-.ai-panel__suggests {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 6px;
-}
-
-.ai-panel__suggests .sd-chip {
-  cursor: pointer;
-}
-
-.ai-panel__suggests .sd-chip:hover {
-  border-color: rgba(34, 211, 238, 0.6);
-  color: var(--sd-text);
-}
-
 .ai-panel__msg {
   display: flex;
 }
@@ -230,6 +201,20 @@ async function send(): Promise<void> {
   :deep(code) {
     font-family: var(--sd-font-mono);
     font-size: 12px;
+  }
+
+  :deep(ul) {
+    padding-left: 18px;
+    list-style: disc;
+  }
+
+  :deep(ol) {
+    padding-left: 18px;
+    list-style: decimal;
+  }
+
+  :deep(li) {
+    margin: 2px 0;
   }
 
   :deep(a) {

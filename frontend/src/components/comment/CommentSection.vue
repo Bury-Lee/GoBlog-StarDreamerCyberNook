@@ -197,12 +197,10 @@ async function onDigg(comment: CommentModel): Promise<void> {
     return
   }
   try {
-    await diggComment(comment.id)
-    const rootID = comment.rootParentID ?? comment.id
-    if (childState[rootID]) {
-      delete childState[rootID]
+    const result = await diggComment(comment.id)
+    if (typeof result?.diggCount === 'number') {
+      comment.diggCount = result.diggCount
     }
-    await load()
   } catch {
     // ignore
   }

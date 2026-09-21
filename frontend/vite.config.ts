@@ -1,5 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig, loadEnv } from 'vite'
+import { loadEnv } from 'vite'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ mode }) => {
@@ -34,6 +35,20 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+    },
+    test: {
+      environment: 'jsdom',
+      environmentOptions: {
+        jsdom: {
+          url: 'http://127.0.0.1:8080/',
+        },
+      },
+      include: ['tests/**/*.spec.ts'],
+      globalSetup: ['./tests/global-setup.ts'],
+      fileParallelism: false,
+      testTimeout: 120000,
+      hookTimeout: 60000,
+      restoreMocks: true,
     },
   }
 })

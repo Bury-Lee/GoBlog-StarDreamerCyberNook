@@ -142,8 +142,22 @@ export const ARTICLE_ORDER_OPTIONS = [
   { label: '最多收藏', value: 'collect_count desc' },
 ]
 
-export function stripHtml(html?: string | null): string {
-  if (!html) return ''
+export interface AiQualityParts {
+  score: string
+  comment: string
+}
+
+export function parseAiQuality(raw?: string | null): AiQualityParts {
+  const text = (raw || '').trim()
+  if (!text) return { score: '', comment: '' }
+  const scoreMatch = text.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+)/)
+  const score = scoreMatch ? `${scoreMatch[1]}/${scoreMatch[2]}` : text.length <= 12 ? text : ''
+  const commentMatch = text.match(/简评[:：]?\s*([\s\S]+)$/)
+  const comment = commentMatch ? commentMatch[1].trim() : score ? '' : text
+  return { score, comment }
+}
+
+export function stripHtml(html?: string | null): string {  if (!html) return ''
   return html
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')

@@ -23,6 +23,11 @@ export function removeComment(id: number): Promise<unknown> {
   return http.delete<unknown>(`/comment/${id}`)
 }
 
-export function diggComment(id: number): Promise<unknown> {
-  return http.post<unknown>(`/comment/digg/${id}`)
+export interface CommentDiggResult {
+  digged: boolean
+  diggCount: number
+}
+
+export function diggComment(id: number): Promise<CommentDiggResult> {
+  return http.post<CommentDiggResult>(`/comment/digg/${id}`)
 }

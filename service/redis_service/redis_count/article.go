@@ -47,6 +47,21 @@ func SetCacheComment(articleID uint, increase bool) {
 	setDirtArticle(articleCacheComment, articleID, increase)
 }
 
+// SetCacheCommentBy 按指定增量调整文章评论数缓存
+// 说明:一次删除多条评论(一级评论连同其子评论)时增量不是±1,需要按实际删除数量调整
+func SetCacheCommentBy(articleID uint, delta int) {
+	if delta == 0 {
+		return
+	}
+	ctx := context.Background()
+	if err := setDirtScript.Run(ctx, global.RedisTimeCache,
+		[]string{string(articleCacheComment), DirtyArticleSetKey},
+		strconv.Itoa(int(articleID)), int64(delta),
+	).Err(); err != nil {
+		logrus.Errorf("更新文章评论数缓存失败, id: %d, delta: %d, err: %v", articleID, delta, err)
+	}
+}
+
 func RequeueDirtyArticleIDs(ids []uint) {
 	if len(ids) == 0 {
 		return
