@@ -75,6 +75,7 @@
               <el-dropdown-item command="collections" :icon="Star">我的收藏</el-dropdown-item>
               <el-dropdown-item command="history" :icon="Clock">浏览记录</el-dropdown-item>
               <el-dropdown-item command="settings" :icon="Setting">个人设置</el-dropdown-item>
+              <el-dropdown-item command="chat-all" :icon="ChatDotRound">会话列表</el-dropdown-item>
               <el-dropdown-item v-if="userStore.isAdmin" command="admin" :icon="Monitor" divided>
                 管理后台
               </el-dropdown-item>
@@ -132,6 +133,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowDown,
   Bell,
+  ChatDotRound,
   Clock,
   Document,
   EditPen,
@@ -234,6 +236,9 @@ function goRegister(): void {
 async function onCommand(command: string): Promise<void> {
   const id = userStore.userId
   switch (command) {
+    case 'chat-all':
+      router.push({ name: 'chat' })
+      break
     case 'profile':
       router.push({ name: 'user-home', params: { id } })
       break

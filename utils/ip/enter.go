@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 )
+
+// searchMu 保护 IPsearcher:ip2region 的 Searcher 非线程安全(内部 ioCount/缓冲会被并发改写)
+var searchMu sync.Mutex
 
 // GetIpAddr 根据IP地址获取地理位置信息
 // 参数:ip - 要查询的IP地址字符串
@@ -17,24 +21,46 @@ func GetIpAddr(ip string) (addr string) {
 	if HasLocalIPAddr(ip) {
 		return "本地ip"
 	}
+	if global.IPsearcher == nil {
+		return "未知地址"
+	}
 
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return "异常地址"
+	}
+	// 数据库为 IPv4 库,IPv6 地址无法查询
+	if parsed.To4() == nil {
+		return "未知地址"
+	}
+
+	//并发保护:Seek/Read 与内部计数非线程安全,加锁避免结果错乱
+	searchMu.Lock()
 	region, err := global.IPsearcher.Search(ip)
+	searchMu.Unlock()
 	if err != nil {
 		logrus.Warnf("错误的ip地址 %s", err)
 		return "异常地址"
 	}
+	if region == "" {
+		return "未知地址"
+	}
 	_addrList := strings.Split(region, "|")
-	if len(_addrList) != 5 {
+
+	// 兼容两种数据格式:
+	//   5 段:国家|区域|省份|城市|运营商
+	//   4 段:国家|省份|城市|运营商(xdb 新版默认格式)
+	var country, province, city string
+	switch len(_addrList) {
+	case 5:
+		country, province, city = _addrList[0], _addrList[2], _addrList[3]
+	case 4:
+		country, province, city = _addrList[0], _addrList[1], _addrList[2]
+	default:
 		// 数据库返回的格式异常，记录警告日志
-		logrus.Warnf("异常的ip地址 %s", ip)
+		logrus.Warnf("异常的ip地址 %s, region=%q", ip, region)
 		return "异常地址"
 	}
-
-	// _addrList 五个部分分别代表：
-	// 国家(0) | 区域(1) | 省份(2) | 城市(3) | 运营商(4)
-	country := _addrList[0]
-	province := _addrList[2]
-	city := _addrList[3]
 
 	// 按照优先级格式化地址信息
 	// 1. 优先显示省份和城市（当两者都有效时）

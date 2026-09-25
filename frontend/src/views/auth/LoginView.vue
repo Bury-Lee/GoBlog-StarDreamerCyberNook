@@ -44,10 +44,10 @@
 
       <el-form-item v-if="captchaEnabled" prop="captchaCode">
         <CaptchaField
-          v-model="captcha.state.captchaCode"
+          v-model="form.captchaCode"
           :image="captcha.state.image"
           :loading="captcha.loading"
-          @refresh="captcha.load"
+          @refresh="refreshCaptcha"
         />
       </el-form-item>
 
@@ -98,7 +98,14 @@ const captchaEnabled = computed(() => siteStore.captchaEnabled)
 const form = reactive({
   val: '',
   pwd: '',
+  captchaCode: '',
 })
+
+//刷新验证码:清空已输入的验证码,保证与表单校验同一数据源
+async function refreshCaptcha(): Promise<void> {
+  form.captchaCode = ''
+  await captcha.load()
+}
 
 const rules = computed<FormRules>(() => {
   const base: FormRules = {
@@ -113,12 +120,13 @@ const rules = computed<FormRules>(() => {
 
 watch(loginType, (value) => {
   captcha.reset()
-  if (captchaEnabled.value) void captcha.load()
+  form.captchaCode = ''
+  if (captchaEnabled.value) void refreshCaptcha()
   void value
 })
 
 onMounted(() => {
-  if (captchaEnabled.value) void captcha.load()
+  if (captchaEnabled.value) void refreshCaptcha()
   if (!siteStore.loginOptions.usernamePassword && siteStore.loginOptions.emailLogin) {
     loginType.value = '邮箱'
   }
@@ -147,13 +155,13 @@ async function submit(): Promise<void> {
       val: form.val.trim(),
       pwd: form.pwd,
       captchaID: captchaEnabled.value ? captcha.state.captchaID : undefined,
-      captchaCode: captchaEnabled.value ? captcha.state.captchaCode : undefined,
+      captchaCode: captchaEnabled.value ? form.captchaCode : undefined,
     })
     ElMessage.success('登录成功')
     redirectAfterLogin()
   } catch {
     if (captchaEnabled.value) {
-      await captcha.load()
+      await refreshCaptcha()
     }
   } finally {
     submitting.value = false

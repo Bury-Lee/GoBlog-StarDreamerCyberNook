@@ -259,7 +259,7 @@ func (ChatApi) SessionListView(c *gin.Context) { // 查我的会话列表
 		common.Options{
 			PageInfo:      req.PageInfo,
 			Where:         global.DB.Where("user_id = ?", claims.UserID),
-			Preloads:      []string{"UserModel"},
+			Preloads:      []string{"UserModel", "LastMessage"}, //预加载最后一条消息,便于前端展示会话摘要
 			DefaultOrder:  "last_message_time desc",
 			AllowedOrders: []string{"id", "created_at", "last_message_time"},
 			CountCap:      common.DefaultCountCap, //总数封顶

@@ -20,10 +20,10 @@
 
       <el-form-item v-if="captchaEnabled" prop="captchaCode">
         <CaptchaField
-          v-model="captcha.state.captchaCode"
+          v-model="form.captchaCode"
           :image="captcha.state.image"
           :loading="captcha.loading"
-          @refresh="captcha.load"
+          @refresh="refreshCaptcha"
         />
       </el-form-item>
 
@@ -125,7 +125,14 @@ const form = reactive({
   password: '',
   confirmPassword: '',
   nickName: '',
+  captchaCode: '',
 })
+
+//刷新验证码:清空已输入的验证码,保证与表单校验同一数据源
+async function refreshCaptcha(): Promise<void> {
+  form.captchaCode = ''
+  await captcha.load()
+}
 
 const rules = computed<FormRules>(() => {
   const base: FormRules = {
@@ -172,7 +179,7 @@ async function sendCode(): Promise<void> {
     ElMessage.warning('请先输入正确的邮箱地址')
     return
   }
-  if (captchaEnabled.value && !captcha.state.captchaCode) {
+  if (captchaEnabled.value && !form.captchaCode) {
     ElMessage.warning('请输入图形验证码')
     return
   }
@@ -182,13 +189,13 @@ async function sendCode(): Promise<void> {
       type: '注册',
       email: form.email.trim(),
       captchaID: captchaEnabled.value ? captcha.state.captchaID : undefined,
-      captchaCode: captchaEnabled.value ? captcha.state.captchaCode : undefined,
+      captchaCode: captchaEnabled.value ? form.captchaCode : undefined,
     })
     emailID.value = result?.emailID || ''
     ElMessage.success('验证码已发送,请查收邮箱(有效期 2 分钟)')
     startCountdown()
   } catch {
-    if (captchaEnabled.value) await captcha.load()
+    if (captchaEnabled.value) await refreshCaptcha()
   } finally {
     sending.value = false
   }
@@ -216,14 +223,14 @@ async function submit(): Promise<void> {
     ElMessage.success('注册成功,欢迎加入')
     router.replace({ name: 'home' })
   } catch {
-    if (captchaEnabled.value) await captcha.load()
+    if (captchaEnabled.value) await refreshCaptcha()
   } finally {
     submitting.value = false
   }
 }
 
 onMounted(() => {
-  if (captchaEnabled.value) void captcha.load()
+  if (captchaEnabled.value) void refreshCaptcha()
 })
 
 onBeforeUnmount(() => {
