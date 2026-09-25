@@ -42,6 +42,10 @@ func FlagDB() { //数据库迁移
 		&models.ArticleSearchModel{},
 		&models.ArticleAddition{},
 		&models.FeedbackModel{},
+		&models.MomentModel{},
+		&models.MomentDiggModel{},
+		&models.MomentCommentModel{},
+		&models.MomentCommentDiggModel{},
 	)
 	if err != nil {
 		//迁移失败必须以非0退出码结束,避免脚本/CI误判成功

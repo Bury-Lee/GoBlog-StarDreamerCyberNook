@@ -16,6 +16,7 @@ import (
 	"StarDreamerCyberNook/api/image_api"
 	"StarDreamerCyberNook/api/log_api"
 	site_message_api "StarDreamerCyberNook/api/message_api"
+	"StarDreamerCyberNook/api/moment_api"
 	"StarDreamerCyberNook/api/site_api"
 	"StarDreamerCyberNook/api/test_api"
 	"StarDreamerCyberNook/api/user_api"
@@ -31,6 +32,7 @@ type Api struct { //在这里注册路由
 	UserApi        user_api.UserApi
 	ArticleApi     article_api.ArticleApi
 	CommentApi     comment_api.CommentApi
+	MomentApi      moment_api.MomentApi
 	SiteMessageApi site_message_api.MessageApi
 	FollowApi      follow_api.FollowApi
 	FeedbackApi    feedback_api.FeedbackApi
