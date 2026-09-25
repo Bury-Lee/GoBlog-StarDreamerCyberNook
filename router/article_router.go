@@ -9,21 +9,21 @@ import (
 
 func ArticleRouter(r *gin.RouterGroup) {
 	app := api.App.ArticleApi
-	r.POST("/article", middleware.AuthMiddleware, app.ArticleCreateView)     //创建文章//待测
-	r.PUT("/article", middleware.AuthMiddleware, app.ArticleUpdateView)      //更新文章//待测
-	r.PUT("/article/inc", middleware.AuthMiddleware, app.ArticleUpdateView2) //增量更新文章//待测
-	r.GET("/article", app.ArticleListView)                                   //获取文章列表 //待测
-	r.GET("/article/search", app.ArticleSearchView)                          //搜索文章//待测
+	r.POST("/article", middleware.AuthMiddleware, app.ArticleCreateView)                     //创建文章//待测
+	r.PUT("/article", middleware.AuthMiddleware, app.ArticleUpdateView)                      //更新文章//待测
+	r.PUT("/article/inc", middleware.AuthMiddleware, app.ArticleUpdateView2)                 //增量更新文章//待测
+	r.GET("/article", app.ArticleListView)                                                   //获取文章列表 //待测
+	r.GET("/article/search", app.ArticleSearchView)                                          //搜索文章//待测
 	r.GET("/article/interaction/:id", middleware.AuthMiddleware, app.ArticleInteractionView) //当前用户对文章的点赞/收藏状态
-	r.GET("/article/:id", app.ArticleDetailView)                             //获取文章详情//待测
+	r.GET("/article/:id", app.ArticleDetailView)                                             //获取文章详情//待测
 
 	r.POST("/article/top/:id", middleware.AuthMiddleware, app.ArticleTopView)              //置顶文章
 	r.DELETE("/article/top", middleware.AuthMiddleware, app.ArticleCancleTopView)          //取消置顶
 	r.DELETE("/article/admingTop", middleware.AdminMiddleware, app.AdminArticleDeleteView) //管理员取消置顶
 
-	r.GET("/article/review", middleware.AdminMiddleware, app.ArticleReviewListView)    //获取审核文章列表
-	r.POST("/article/review/:id", middleware.AdminMiddleware, app.ArticleReviewView)   //审核文章
-	r.POST("/article/ai/review", middleware.AdminMiddleware, app.ArticleAIReviewView)  //AI审核待审核文章(单个/批量)
+	r.GET("/article/review", middleware.AdminMiddleware, app.ArticleReviewListView)   //获取审核文章列表
+	r.POST("/article/review/:id", middleware.AdminMiddleware, app.ArticleReviewView)  //审核文章
+	r.POST("/article/ai/review", middleware.AdminMiddleware, app.ArticleAIReviewView) //AI审核待审核文章(单个/批量)
 
 	r.POST("/article/look", middleware.AuthMiddleware, app.ArticleLookView)       //创建浏览记录,这样单独加个接口还能开无痕模式设置
 	r.POST("/article/digg/:id", middleware.AuthMiddleware, app.ArticleDiggView)   //点赞文章
@@ -39,6 +39,7 @@ func ArticleRouter(r *gin.RouterGroup) {
 
 	r.POST("/article/collect", middleware.AuthMiddleware, app.ArticleCollectView)         //收藏文章
 	r.GET("/article/collect/folder", app.CollectListView)                                 //查看收藏夹列表
+	r.GET("/article/collect/folder/:id", app.CollectDetailView)                           //查看收藏夹详情
 	r.GET("/article/collect/list", app.CollectArticleListView)                            //查看收藏夹内文章列表
 	r.POST("/article/collect/folder", middleware.AuthMiddleware, app.CollectCreateView)   //创建收藏夹
 	r.PUT("/article/collect/folder", middleware.AuthMiddleware, app.CollectUpdateView)    //更新收藏夹

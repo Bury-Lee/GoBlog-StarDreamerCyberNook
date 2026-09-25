@@ -40,7 +40,6 @@ func (self UserModel) AfterCreate(tx *gorm.DB) error { //用户创建后,自动�
 	// 钩子函数创建用户配置
 	err1 := tx.Create(&UserConfModel{
 		UserID:      self.ID,
-		OpenCollect: true,
 		OpenFollow:  true,
 		OpenFans:    true, //默认开启
 		HomeStyleID: 1,    //默认样式为1
@@ -67,7 +66,7 @@ type UserConfModel struct {
 	UserID             uint       `gorm:"primaryKey;unique" json:"userID"` // 用户ID，唯一索引
 	UserModel          UserModel  `gorm:"foreignKey:UserID" json:"-"`      // 关联的用户信息
 	UpdateUsernameDate *time.Time `json:"updateUsernameDate"`              // 上次修改用户名时间，使用指针区分是否修改过
-	OpenCollect        bool       `json:"openCollect"`                     // 公开我的收藏
+	OpenCollect        bool       `json:"openCollect"`                     // Deprecated: 收藏夹公开改为文件夹级 CollectModel.IsPublic,该字段不再参与权限判断,后续版本移除
 	OpenFollow         bool       `json:"openFollow"`                      // 公开我的关注
 	OpenFans           bool       `json:"openFans"`                        // 公开我的粉丝
 	OpenHistory        bool       `json:"openHistory"`                     // 公开我的浏览记录

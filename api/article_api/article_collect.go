@@ -144,11 +144,12 @@ func (ArticleApi) CollectCreateView(c *gin.Context) {
 	response.OkWithMsg("创建收藏夹成功", c)
 }
 
-type CollectUpdateRequest struct { //创建收藏夹请求参数,请求创建时不用传id参数,除了创建也可以用于更新收藏夹
-	ID       uint    `json:"id" binding:"required"` //更新时需要传id参数
-	Title    *string `json:"title" `
-	Abstract *string `json:"abstract"`
-	Cover    *string `json:"cover"`
+type CollectUpdateRequest struct { //更新收藏夹请求参数,仅更新传入的字段
+	ID       uint    `json:"id" binding:"required"`  //更新时需要传id参数
+	Title    *string `json:"title" s:"title"`        // 收藏夹名称
+	Abstract *string `json:"abstract" s:"abstract"`  // 收藏夹简介
+	Cover    *string `json:"cover" s:"cover"`        // 收藏夹封面
+	IsPublic *bool   `json:"isPublic" s:"is_public"` // 是否公开该收藏夹
 }
 
 func (ArticleApi) CollectUpdateView(c *gin.Context) {
@@ -166,9 +167,14 @@ func (ArticleApi) CollectUpdateView(c *gin.Context) {
 		return
 	}
 
-	updateMap := utils_other.StructToMap(&req, "sql") //把请求参数转换成map,方便后续更新,并且只更新有值的字段
+	updateMap := utils_other.StructToMap(&req, "s") //把请求参数转换成map,方便后续更新,并且只更新有值的字段
 	//也许不允许更新成重复名称的收藏夹?
 	//现在来看还允许吧,给用户更高的自由度,毕竟收藏夹名称也不是很重要,而且用户也可以通过id和封面区分不同的收藏夹,所以就不做这个限制了
+
+	if len(updateMap) == 0 {
+		response.FailWithMsg("没有需要更新的字段", c)
+		return
+	}
 
 	err = global.DB.Model(&model).Updates(updateMap).Error
 	if err != nil {
@@ -270,14 +276,8 @@ func (ArticleApi) CollectListView(c *gin.Context) { //先看看用户有没有�
 		return
 	}
 
-	//检查收藏夹所属用户,查看用户是否开启收藏夹列表,如果没有开启且非用户,则返回错误,通过后分页查询收藏夹列表
-	var user models.UserConfModel
+	//收藏夹公开由文件夹级 is_public 控制(用户级 openCollect 已废弃),非本人只能看到公开的收藏夹
 	claims, _ := jwts.ParseTokenByGin(c)
-	global.DB.Where("user_id = ?", req.ID).First(&user)                         //看看用户有没有开启收藏夹功能
-	if user.OpenCollect != true && (claims == nil || claims.UserID != req.ID) { //如果用户没有开启收藏夹功能,并且请求者不是用户本人,则返回错误
-		response.FailWithMsg("用户未开启收藏夹功能", c)
-		return
-	}
 
 	//通过验证,组织数据,分页查询
 	var query models.CollectModel
@@ -285,7 +285,11 @@ func (ArticleApi) CollectListView(c *gin.Context) { //先看看用户有没有�
 	var option common.Options
 	//对req的option进行过滤
 	option.Where = global.DB.Where("user_id = ?", req.ID) //只允许查询指定ID的收藏夹
-	option.Likes = []string{"title", "abstract"}          //只允许模糊匹配收藏夹名称和摘要
+	//非本人只能看到公开的收藏夹
+	if claims == nil || claims.UserID != req.ID {
+		option.Where = option.Where.Where("is_public = ?", true)
+	}
+	option.Likes = []string{"title", "abstract"} //只允许模糊匹配收藏夹名称和摘要
 	option.DefaultOrder = "created_at desc"
 	option.AllowedOrders = []string{"id", "created_at"}
 
@@ -322,11 +326,9 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 		return
 	}
 	claims, _ := jwts.ParseTokenByGin(c)
-	//非本人(含未登录)访问他人收藏夹时,必须对方开启了公开收藏,否则统一按不存在处理,避免泄露隐私
+	//非本人(含未登录)访问他人收藏夹时,仅公开收藏夹(is_public)可访问,否则统一按不存在处理,避免泄露隐私
 	if claims == nil || claims.UserID != collect.UserID {
-		var user models.UserConfModel
-		global.DB.Where("user_id = ?", collect.UserID).First(&user)
-		if user.OpenCollect != true {
+		if !collect.IsPublic {
 			response.Fail(response.NotFound, "收藏夹不存在", response.EmptyData, c)
 			return
 		}
@@ -369,4 +371,39 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 	applyArticleCountDeltas(ptrs)
 
 	response.OkWithList(data, count, c)
+}
+
+// CollectDetailResponse 收藏夹详情响应
+type CollectDetailResponse struct {
+	models.CollectModel
+	ArticleCount int64 `json:"articleCount"` // 收藏夹内文章数量
+}
+
+// CollectDetailView 获取单个收藏夹详情
+func (ArticleApi) CollectDetailView(c *gin.Context) {
+	var req models.IDRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		response.FailWithMsg("参数错误", c)
+		return
+	}
+
+	var collect models.CollectModel
+	if err := global.DB.Take(&collect, "id = ?", req.ID).Error; err != nil {
+		response.Fail(response.NotFound, "收藏夹不存在", response.EmptyData, c)
+		return
+	}
+
+	//非本人(含未登录)访问他人收藏夹时,仅公开收藏夹(is_public)可访问,否则统一按不存在处理,避免泄露隐私
+	claims, _ := jwts.ParseTokenByGin(c)
+	if claims == nil || claims.UserID != collect.UserID {
+		if !collect.IsPublic {
+			response.Fail(response.NotFound, "收藏夹不存在", response.EmptyData, c)
+			return
+		}
+	}
+
+	var articleCount int64
+	global.DB.Model(&models.UserArticleCollectModel{}).Where("collect_id = ?", collect.ID).Count(&articleCount)
+
+	response.OkWithData(CollectDetailResponse{CollectModel: collect, ArticleCount: articleCount}, c)
 }

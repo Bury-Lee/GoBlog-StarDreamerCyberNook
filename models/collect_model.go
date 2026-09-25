@@ -15,5 +15,6 @@ type CollectModel struct {
 	UserID      uint                      `json:"userID"`                                  // 收藏夹所属用户ID
 	UserModel   UserModel                 `gorm:"foreignKey:UserID" json:"-"`              // 收藏夹所属用户信息
 
-	IsDefault bool `json:"isDefault"` // 是否为默认收藏夹
+	IsDefault bool `json:"isDefault"`                    // 是否为默认收藏夹
+	IsPublic  bool `gorm:"default:true" json:"isPublic"` // 收藏夹是否公开(非本人访问时,需同时满足用户开启公开收藏且该收藏夹公开)
 }

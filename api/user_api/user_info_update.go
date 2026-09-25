@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type UserInfoUpdateRequest struct { //TODO:这个到时候要做测试
+type UserInfoUpdateRequest struct {
 	Avatar      *string            `json:"avatar" s-u:"avatar"`
 	Abstract    *string            `json:"abstract" s-u:"abstract"`
 	LikeTags    *[]string          `json:"likeTags" s-u:"like_tags"`
@@ -23,7 +23,6 @@ type UserInfoUpdateRequest struct { //TODO:这个到时候要做测试
 	ContactInfo *map[string]string `json:"contactInfo" s-u:"contact_info"` // 联系方式，JSON格式存储
 	// Email       *string            `json:"email" s-u:"email"`              // 邮箱，唯一索引//这个和登录账号相关,暂时不放在这里更新
 
-	OpenCollect *bool `json:"openCollect" s-u-c:"open_collect"`  // 公开我的收藏
 	OpenFollow  *bool `json:"openFollow" s-u-c:"open_follow"`    // 公开我的关注
 	OpenFans    *bool `json:"openFans" s-u-c:"open_fans"`        // 公开我的粉丝
 	HomeStyleID *uint `json:"homeStyleID" s-u-c:"home_style_id"` // 主页样式的id

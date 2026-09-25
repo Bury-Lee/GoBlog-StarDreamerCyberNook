@@ -24,7 +24,6 @@ type UserDetailResponse struct { //个人主页的返回
 
 	//以下为配置表的字段
 	UpdateUsernameDate *time.Time `json:"updateUsernameDate"` // 上次修改用户名的时间,因为可能没改过,避免无法区分nil,使用指针
-	OpenCollect        bool       `json:"openCollect"`        // 公开我的收藏
 	OpenFollow         bool       `json:"openFollow"`         // 公开我的关注
 	OpenFans           bool       `json:"openFans"`           // 公开我的粉丝
 	HomeStyleID        uint       `json:"homeStyleID"`        // 主页样式的id
@@ -56,7 +55,6 @@ func (UserApi) UserDetailView(c *gin.Context) {
 
 	if user.UserConfModel != nil {
 		result.UpdateUsernameDate = user.UserConfModel.UpdateUsernameDate
-		result.OpenCollect = user.UserConfModel.OpenCollect
 		result.OpenFollow = user.UserConfModel.OpenFollow
 		result.OpenFans = user.UserConfModel.OpenFans
 		result.HomeStyleID = user.UserConfModel.HomeStyleID

@@ -308,7 +308,6 @@ Authorization: Bearer <RefreshToken>
     "contactInfo": { "github": "xxx" },
     "role": 1,
     "updateUsernameDate": null,
-    "openCollect": true,
     "openFollow": true,
     "openFans": false,
     "homeStyleID": 1
@@ -320,9 +319,10 @@ Authorization: Bearer <RefreshToken>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `role` | int | 1=普通用户, 2=管理员 |
-| `openCollect` | bool | 是否公开收藏夹 |
 | `openFollow` | bool | 是否公开关注列表 |
 | `openFans` | bool | 是否公开粉丝列表 |
+
+> **变更**：`openCollect` 字段已从该响应移除。收藏夹公开改为**文件夹级** `CollectModel.isPublic`，不再使用用户级开关。
 
 ---
 
@@ -390,7 +390,6 @@ Authorization: Bearer <RefreshToken>
   "nickName": "新昵称",
   "Age": 26,
   "contactInfo": { "github": "new" },
-  "openCollect": true,
   "openFollow": false,
   "openFans": true,
   "homeStyleID": 2
@@ -398,6 +397,7 @@ Authorization: Bearer <RefreshToken>
 ```
 
 > 若启用 AI 审核，昵称/简介/标签/联系方式会被 AI 审核，不通过则拒绝更新。
+> **变更**：`openCollect` 已废弃并不再接收，收藏夹公开请使用 `PUT /api/article/collect/folder` 的 `isPublic`。
 
 ---
 
@@ -1183,7 +1183,7 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 #### 创建收藏夹
 **POST /api/article/collect/folder**
 
-> 需要认证。
+> 需要认证。新建收藏夹默认 `isPublic: true`（创建后可通过更新接口改为私有）。
 
 **请求体**：
 ```json
@@ -1197,7 +1197,7 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 #### 更新收藏夹
 **PUT /api/article/collect/folder**
 
-> 需要认证（只能更新自己的）。
+> 需要认证（只能更新自己的）。所有字段可选，仅更新传入的字段。
 
 **请求体**（所有字段可选）：
 ```json
@@ -1205,9 +1205,20 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
   "id": 1,
   "title": "新名称",
   "abstract": "新描述",
-  "cover": "/api/image?id=2"
+  "cover": "/api/image?id=2",
+  "isPublic": false
 }
 ```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | uint | 收藏夹 ID（必填） |
+| `title` | string | 收藏夹名称 |
+| `abstract` | string | 收藏夹简介 |
+| `cover` | string | 收藏夹封面 |
+| `isPublic` | bool | 是否公开该收藏夹（**收藏夹级**隐私开关） |
+
+> 传空对象 `{ "id": 1 }` 会返回 `没有需要更新的字段`。
 
 #### 删除收藏夹
 **DELETE /api/article/collect/folder**
@@ -1230,9 +1241,36 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 |------|------|
 | `id` | 用户 ID（必填），查该用户的收藏夹 |
 
-> 若用户未开启 `openCollect` 且请求者非本人，则拒绝。
+> 非本人只返回 `isPublic = true` 的收藏夹。
 
 支持通用分页和标题/摘要模糊搜索。
+
+#### 收藏夹详情
+**GET /api/article/collect/folder/:id**
+
+> 新增接口。获取单个收藏夹详情 + 文章数量。
+
+**路径参数**：
+
+| 参数 | 说明 |
+|------|------|
+| `id` | 收藏夹 ID |
+
+**响应 `data`**：
+```json
+{
+  "id": 1,
+  "title": "收藏夹名称",
+  "abstract": "描述",
+  "cover": "/api/image?id=1",
+  "userID": 3,
+  "isDefault": false,
+  "isPublic": true,
+  "articleCount": 12
+}
+```
+
+> 非本人（含未登录）访问时，仅当该收藏夹 `isPublic = true` 才可访问，否则统一返回 **404**。
 
 #### 收藏夹内文章列表
 **GET /api/article/collect/list**
@@ -1246,7 +1284,7 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 
 支持通用分页，按收藏时间倒序返回，只返回**已发布**文章。
 
-> 非本人（含未登录）访问他人收藏夹时，若对方未开启 `openCollect`，统一返回 **404**（不暴露收藏夹是否存在）。
+> 非本人（含未登录）访问他人收藏夹时，仅当该收藏夹 `isPublic = true` 才可访问，否则统一返回 **404**（不暴露收藏夹是否存在）。
 
 ---
 
@@ -1720,7 +1758,10 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 | 邮箱验证码 | 8 位字母数字，发送频率 1 次/分钟，失败 5 次作废 |
 | 安全加固 | JWT 密钥强度校验、登录/注册限流、安全响应头、CORS 白名单 |
 | 文章状态 | 枚举修正：0=草稿、1=审核中、2=已发布、3=已下线 |
+| 收藏夹更新 | 修复更新不生效问题；新增 `isPublic` 收藏夹级开关 |
+| 收藏夹详情 | 新增 `GET /api/article/collect/folder/:id` |
+| 收藏夹权限 | 非本人访问仅取决于该收藏夹 `isPublic`；用户级 `openCollect` 已废弃 |
 
 ---
 
-*文档更新时间：2026-09-21*
+*文档更新时间：2026-09-25*
