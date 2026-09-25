@@ -360,7 +360,14 @@ Authorization: Bearer <RefreshToken>
 
 **GET /api/user/list**
 
-无需认证。支持通用分页参数，模糊搜索昵称和简介。
+无需认证。支持通用分页参数。
+
+**Query 参数**：
+
+| 参数 | 说明 |
+|------|------|
+| `key` | 按**昵称**模糊匹配（不搜索简介） |
+| `userID` | 按用户 ID **精确**匹配 |
 
 **响应列表项**（仅返回公开字段，不包含邮箱、OpenID、联系方式等隐私信息）：
 
@@ -1712,6 +1719,78 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 
 ---
 
+## 17. 反馈墙
+
+> 反馈列表为**全站公开**（反馈墙），提交可匿名；处理反馈即更新该条记录（增量更新）。
+
+### 17.1 提交反馈
+
+**POST /api/feedback**
+
+> 登录可选：未登录也可提交（`userID=0`）。匿名仅影响展示，落库仍记录 `userID` 便于追溯。
+
+**请求体**：
+```json
+{
+  "content": "反馈内容（必填，≤2000 字）",
+  "contact": "联系方式（可选）",
+  "type": 2,
+  "isAnonymous": false
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `content` | string | 反馈内容，必填 |
+| `contact` | string | 联系方式，可选 |
+| `type` | int8 | 0其他 1功能建议 2问题反馈 3内容举报 |
+| `isAnonymous` | bool | 是否匿名（匿名时列表不展示提交者） |
+
+### 17.2 反馈墙列表（全站公开）
+
+**GET /api/feedback**
+
+无需认证。支持通用分页参数；`key` 按内容模糊匹配；另支持 `status`(0待处理 1已采纳未处理 2正在处理 3已处理)、`type` 筛选。
+
+**响应列表项**：
+```json
+{
+  "id": 1,
+  "userID": 2,
+  "isAnonymous": false,
+  "content": "反馈内容",
+  "type": 2,
+  "status": 0,
+  "reply": "",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+> 返回的是过滤后的反馈模型：`contact`、`handlerID` 不对外返回；`isAnonymous=true` 时 `userID` 也不返回（`omitempty` 省略）。
+
+### 17.3 处理反馈（管理员，增量更新）
+
+**PUT /api/feedback/:id**
+
+> 需要管理员权限。更新后**返回更新后的该条反馈**（结构与列表项同），前端可直接替换列表中对应项。
+
+**请求体**：
+```json
+{
+  "status": 3,
+  "reply": "已修复，感谢反馈"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `status` | 0待处理 1已采纳未处理 2正在处理 3已处理 |
+| `reply` | 管理员回复 |
+
+**响应 `data`**：更新后的反馈条目（结构同 17.2 列表项）。
+
+---
+
 ## 附录 A：文章状态枚举
 
 | 值 | 含义 |
@@ -1770,6 +1849,9 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 | 收藏夹详情 | 新增 `GET /api/article/collect/folder/:id` |
 | 收藏夹权限 | 非本人访问仅取决于该收藏夹 `isPublic`；用户级 `openCollect` 已移除 |
 | AI 点评 | `aiQuality`/`aiAbstract` 迁到扩展附录表，详情以 `articleAddition` 对象返回（含 `aiModel`）；新增配置 `ai.auto_comment` 定时补全 |
+| 用户搜索 | `/api/user/list` 支持 `userID` 精确匹配；`key` 仅模糊匹配昵称（不再搜简介） |
+| 反馈墙 | 新增 `POST /api/feedback`（可匿名）、`GET /api/feedback`（全站公开）、`PUT /api/feedback/:id`（管理员，返回更新后的条目） |
+| 数量封顶 | 分页接口新增 `capped` 字段，总数超过阈值时前端显示 `>count`（评论列表阈值为 1000） |
 
 ---
 

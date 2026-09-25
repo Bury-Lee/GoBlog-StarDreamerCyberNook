@@ -73,6 +73,7 @@ func InitRouter() *gin.Engine {
 	AIRouter(nr) //已测试完毕
 	FriendRouter(nr)
 	UserFollowRouter(nr) //关注/粉丝/好友
+	FeedbackRouter(nr)   //用户反馈
 
 	r.NoRoute(func(ctx *gin.Context) { //没命中任何路由时的兜底
 		path := ctx.Request.URL.Path
