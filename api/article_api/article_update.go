@@ -97,6 +97,9 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 		mps["status"] = models.StatusPending
 	}
 
+	//内容变更且AI审核通过时重新生成的AI点评(写入文章扩展附录表)
+	var aiQuality, aiAbstract string
+
 	if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination { //启用ai审核(与创建逻辑一致,关闭审核时不改状态)
 		res, err := ai_service.CreateSingleReply("文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content, global.SystemPromptArticleReview.String())
 		if err != nil {
@@ -106,22 +109,16 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 		switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
 		case "通过":
 			mps["status"] = models.StatusPublished
-			//追加ai摘要和ai评级
-			{ //ai摘要
-				res, err := ai_service.CreateSingleReply("文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content, global.SystemPromptArticleAbstract.String())
-				if err != nil {
-					logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-				} else {
-					mps["ai_abstract"] = res
-				}
+			//内容变更后重新生成AI点评,写入扩展附录表
+			if q, e := ai_service.GenerateArticleQuality(req.Title, req.Abstract, req.Content); e != nil {
+				logrus.Errorf("ai自动创建评级失败: %s", e.Error())
+			} else {
+				aiQuality = q
 			}
-			{ //ai评级
-				res, err := ai_service.CreateSingleReply("文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content, global.SystemPromptArticleAiQuality.String())
-				if err != nil {
-					logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-				} else {
-					mps["ai_quality"] = res
-				}
+			if a, e := ai_service.GenerateArticleAbstract(req.Title, req.Abstract, req.Content); e != nil {
+				logrus.Errorf("ai自动创建摘要失败: %s", e.Error())
+			} else {
+				aiAbstract = a
 			}
 
 		case "拒绝":
@@ -136,6 +133,19 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 	if err != nil {
 		response.FailWithMsg("更新失败", c)
 		return
+	}
+
+	//重新生成AI点评时以 article_id 为键 upsert 到扩展附录表
+	if aiQuality != "" || aiAbstract != "" {
+		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
+			Assign(map[string]any{
+				"ai_quality":  aiQuality,
+				"ai_abstract": aiAbstract,
+				"ai_model":    global.Config.AI.Model,
+			}).
+			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
+			logrus.Errorf("更新AI点评失败,文章 %d: %s", article.ID, e.Error())
+		}
 	}
 
 	//tag_list走结构体更新,保证serializer:json生效
@@ -270,6 +280,9 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 
 	contentChanged := req.Title != nil || req.Abstract != nil || req.Content != nil
 
+	//内容变更且AI审核通过时重新生成的AI点评(写入文章扩展附录表)
+	var aiQuality, aiAbstract string
+
 	if contentChanged {
 		if article.Status == models.StatusPublished && global.Config.Site.Article.EnableExamination {
 			// 开启审核时,已发布的文章编辑后需要重新审核
@@ -298,22 +311,16 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 			switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
 			case "通过":
 				mps["status"] = models.StatusPublished
-				//追加ai摘要和ai评级
-				{ //ai摘要
-					res, err := ai_service.CreateSingleReply("文章标题:"+titleForAI+"\n文章摘要:"+abstractForAI+"\n文章内容:"+contentForAI, global.SystemPromptArticleAbstract.String())
-					if err != nil {
-						logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-					} else {
-						mps["ai_abstract"] = res
-					}
+				//内容变更后重新生成AI点评,写入扩展附录表
+				if q, e := ai_service.GenerateArticleQuality(titleForAI, abstractForAI, contentForAI); e != nil {
+					logrus.Errorf("ai自动创建评级失败: %s", e.Error())
+				} else {
+					aiQuality = q
 				}
-				{ //ai评级
-					res, err := ai_service.CreateSingleReply("文章标题:"+titleForAI+"\n文章摘要:"+abstractForAI+"\n文章内容:"+contentForAI, global.SystemPromptArticleAiQuality.String())
-					if err != nil {
-						logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-					} else {
-						mps["ai_quality"] = res
-					}
+				if a, e := ai_service.GenerateArticleAbstract(titleForAI, abstractForAI, contentForAI); e != nil {
+					logrus.Errorf("ai自动创建摘要失败: %s", e.Error())
+				} else {
+					aiAbstract = a
 				}
 
 			case "拒绝":
@@ -349,6 +356,19 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 	if err != nil {
 		response.FailWithMsg("更新失败", c)
 		return
+	}
+
+	//重新生成AI点评时以 article_id 为键 upsert 到扩展附录表
+	if aiQuality != "" || aiAbstract != "" {
+		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
+			Assign(map[string]any{
+				"ai_quality":  aiQuality,
+				"ai_abstract": aiAbstract,
+				"ai_model":    global.Config.AI.Model,
+			}).
+			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
+			logrus.Errorf("更新AI点评失败,文章 %d: %s", article.ID, e.Error())
+		}
 	}
 
 	//tag_list走结构体更新,保证serializer:json生效

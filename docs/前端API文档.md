@@ -883,8 +883,14 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
     "username": "系统用户名",
     "nickname": "昵称",
     "userAvatar": "头像",
-    "aiAbstract": "AI自动摘要",
-    "aiQuality": "AI评级",
+    "articleAddition": {
+      "id": 1,
+      "articleID": 1,
+      "adminComment": "管理员附加评论",
+      "aiQuality": "AI评级",
+      "aiAbstract": "AI自动摘要",
+      "aiModel": "local"
+    },
     "openComment": true,
     "status": 3,
     "createdAt": "2024-01-01T00:00:00Z"
@@ -892,6 +898,8 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
   "message": "成功"
 }
 ```
+
+> **变更**：AI 点评（`aiQuality`/`aiAbstract`）与管理员附加评论迁移到文章扩展附录表 `article_additions`（通过 `article_id` 外键一对一同文章关联），详情接口以 **`articleAddition`** 对象返回，并记录生成点评的 AI 模型名 `aiModel`。文章列表/搜索不再返回该对象。
 
 ---
 
@@ -1761,6 +1769,7 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 | 收藏夹更新 | 修复更新不生效问题；新增 `isPublic` 收藏夹级开关 |
 | 收藏夹详情 | 新增 `GET /api/article/collect/folder/:id` |
 | 收藏夹权限 | 非本人访问仅取决于该收藏夹 `isPublic`；用户级 `openCollect` 已废弃 |
+| AI 点评 | `aiQuality`/`aiAbstract` 迁到扩展附录表，详情以 `articleAddition` 对象返回（含 `aiModel`）；新增配置 `ai.auto_comment` 定时补全 |
 
 ---
 

@@ -7,6 +7,8 @@ type AI struct { //AI模型配置
 
 	AutoReview bool `yaml:"auto_review" json:"auto_review"` // 是否启用定时任务自动AI审核(将待审核文章全部交给AI,AI服务不可用时自动跳过)
 
+	AutoComment bool `yaml:"auto_comment" json:"auto_comment"` // 是否启用定时任务补全AI点评(为缺少点评记录的文章生成评级+摘要)
+
 	Model       string  `yaml:"model" json:"model"`             // AI模型名称,为local时使用本地模型
 	Temperature float32 `yaml:"temperature" json:"temperature"` // 温度参数，控制生成文本的随机性
 	MaxTokens   int     `yaml:"max_tokens" json:"max_tokens"`   // 最大生成令牌数

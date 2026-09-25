@@ -122,36 +122,36 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 		Status:      req.Stats,
 	}
 
-	//追加ai摘要和ai评级
+	//生成AI点评(摘要+评级),此时文章还没有ID,待文章创建成功后再写入独立的AI点评表
+	var aiQuality, aiAbstract string
 	if global.Config.AI.Enable {
-		{ //ai摘要
-			// 构建完整的消息列表
-			reply, err := ai_service.CreateSingleReply(
-				"文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content,
-				global.SystemPromptArticleAbstract.String(),
-			)
-			if err != nil {
-				logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-			} else {
-				article.AIAbstract = reply
-			}
+		if reply, e := ai_service.GenerateArticleAbstract(req.Title, req.Abstract, req.Content); e != nil {
+			logrus.Errorf("ai自动创建摘要失败: %s", e.Error())
+		} else {
+			aiAbstract = reply
 		}
-		{ //ai评级
-			// 构建完整的消息列表
-			reply, err := ai_service.CreateSingleReply(
-				"文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content,
-				global.SystemPromptArticleAiQuality.String(),
-			)
-			if err != nil {
-				logrus.Errorf("ai自动创建摘要和评级失败: %s", err.Error())
-			} else {
-				article.AIQuality = reply
-			}
+		if reply, e := ai_service.GenerateArticleQuality(req.Title, req.Abstract, req.Content); e != nil {
+			logrus.Errorf("ai自动创建评级失败: %s", e.Error())
+		} else {
+			aiQuality = reply
 		}
 	}
 	if err = global.DB.Create(&article).Error; err != nil {
 		response.FailWithMsg("文章创建失败", c)
 		return
+	}
+
+	//将AI点评写入文章扩展附录表(含AI模型名),失败不影响文章创建,可由定时任务补全
+	if aiQuality != "" || aiAbstract != "" {
+		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
+			Assign(map[string]any{
+				"ai_quality":  aiQuality,
+				"ai_abstract": aiAbstract,
+				"ai_model":    global.Config.AI.Model,
+			}).
+			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
+			logrus.Errorf("保存AI点评失败,文章 %d 将由定时任务补全: %s", article.ID, e.Error())
+		}
 	}
 
 	//清理可能存在的负缓存:SQLite等数据库删除最新文章后会复用ID,

@@ -50,8 +50,8 @@ type ArticleModel struct {
 	OpenComment   bool           `json:"openComment"`                              // 是否开启评论：true-开启 false-关闭
 	Status        Status         `json:"status"`                                   // 文章状态：0-草稿 1-审核中 2-已发布 3-已下线
 
-	AIQuality  string `json:"aiQuality"`  // AI生成的内容质量评级,1-5分
-	AIAbstract string `json:"aiAbstract"` // AI生成的内容摘要
+	//文章扩展附录,管理员附加评论,AI点评等独立成表,通过外键关联
+	ArticleAddition *ArticleAddition `gorm:"foreignKey:ArticleID" json:"articleAddition"`
 }
 type Status int8 // 文章状态枚举类型
 
@@ -230,4 +230,21 @@ func (this *ArticleModel) BeforeDelete(tx *gorm.DB) (err error) {
 	}
 	logrus.Infof("已清理文章 %d 的关联数据", this.ID)
 	return nil
+}
+
+// ArticleAddition 文章扩展附录表
+// 通过 article_id 外键与文章一对一关联,存放管理员附加评论与AI点评(评级/摘要)
+// AI 点评记录生成它的模型名(aiModel),便于追溯是哪个AI点评的文章
+type ArticleAddition struct {
+	Model
+	ArticleID    uint   `gorm:"uniqueIndex" json:"articleID"`  // 关联文章ID,每篇文章一条
+	AdminComment string `gorm:"size:1024" json:"adminComment"` // 管理员附加评论
+	AIQuality    string `gorm:"size:255" json:"aiQuality"`     // AI生成的内容质量评级
+	AIAbstract   string `gorm:"size:1024" json:"aiAbstract"`   // AI生成的内容摘要
+	AIModel      string `gorm:"size:64" json:"aiModel"`        // 完成本次AI点评的模型名
+}
+
+// TableName 显式指定表名
+func (ArticleAddition) TableName() string {
+	return "article_additions"
 }

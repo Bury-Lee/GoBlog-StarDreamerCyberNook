@@ -71,7 +71,7 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 	// 管理员，能看到全部的文章
 
 	var article models.ArticleModel
-	err := global.DB.Preload("UserModel").Preload("CategoryModel").Take(&article, req.ID).Error
+	err := global.DB.Preload("UserModel").Preload("CategoryModel").Preload("ArticleAddition").Take(&article, req.ID).Error
 	if err != nil {
 		//写入短时负缓存,防止被不存在的ID刷库
 		global.RedisHotPool.Set(ctx, "ArticleID"+idStr, articleNotFoundCache, time.Minute)
@@ -91,6 +91,7 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 	if article.CategoryModel != nil {
 		categoryTitle = &article.CategoryModel.Title
 	}
+	//AI点评通过外键预加载,直接随文章一起返回
 	cached := ArticleDetailResponse{
 		ArticleModel:  article,
 		CategoryTitle: categoryTitle,

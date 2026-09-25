@@ -39,6 +39,22 @@ func ApplyArticleReview(article *models.ArticleModel, status models.Status, msg 
 	}
 	article.Status = status
 
+	//启用AI时,审核通过(变为已发布)顺带刷新文章的AI点评,写入扩展附录表(记录AI模型名)
+	//说明:AI定时审核(SyncAIReview)、接口AI审核与人工审核共用此处,保证点评与审核结果一致
+	if status == models.StatusPublished && global.Config.AI.Enable {
+		if quality, summary, err := ai_service.CommentArticle(article.Title, article.Abstract, article.Content); err != nil {
+			logrus.Errorf("更新文章 %d 的AI点评失败: %v", article.ID, err)
+		} else if err := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
+			Assign(map[string]any{
+				"ai_quality":  quality,
+				"ai_abstract": summary,
+				"ai_model":    global.Config.AI.Model,
+			}).
+			FirstOrCreate(&models.ArticleAddition{}).Error; err != nil {
+			logrus.Errorf("保存文章 %d 的AI点评失败: %v", article.ID, err)
+		}
+	}
+
 	//状态变更后清理详情缓存,避免已下线文章继续可见或新通过的文章一直不可见
 	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(article.ID), 10))
 
