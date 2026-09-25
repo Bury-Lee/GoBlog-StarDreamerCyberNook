@@ -118,6 +118,14 @@ objectStorage:
   prefix:               # 文件前缀，如 uploads/images/
   size:                 # 文件大小限制(mb)
 
+# 前端静态资源托管配置(可选,全部留空表示由 Nginx 等外部服务托管,后端不注册这些路由)
+static:
+  dir: static           # 静态资源根目录(构建脚本会把 frontend/dist 复制到该目录)
+  webPrefix: /web       # 通用静态资源访问前缀,可用于获取图片
+  assetsPrefix: /assets # 构建产物(js/css)访问前缀,需与前端构建配置一致
+  favicon: favicon.svg  # favicon 相对 dir 的路径
+  index: index.html     # SPA 入口文件相对 dir 的路径
+
 # 网站站点配置
 site:
   # 站点基本信息

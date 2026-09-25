@@ -75,16 +75,11 @@
         </el-input>
       </el-form-item>
 
-      <el-checkbox v-model="agreed" class="auth-card__agree">
-        我已阅读并同意本站的用户协议与隐私政策
-      </el-checkbox>
-
       <el-button
         type="primary"
         size="large"
         class="auth-card__submit"
         :loading="submitting"
-        :disabled="!agreed"
         @click="submit"
       >
         注册并登录
@@ -119,7 +114,6 @@ const captcha = useCaptcha('注册')
 const submitting = ref(false)
 const sending = ref(false)
 const countdown = ref(0)
-const agreed = ref(false)
 const emailID = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 
@@ -202,10 +196,6 @@ async function sendCode(): Promise<void> {
 
 async function submit(): Promise<void> {
   if (!formRef.value) return
-  if (!agreed.value) {
-    ElMessage.warning('请先同意用户协议')
-    return
-  }
   if (!emailID.value) {
     ElMessage.warning('请先获取邮箱验证码')
     return
@@ -284,11 +274,6 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 10px;
   width: 100%;
-}
-
-.auth-card__agree {
-  margin-bottom: 14px;
-  font-size: 12px;
 }
 
 .auth-card__submit {

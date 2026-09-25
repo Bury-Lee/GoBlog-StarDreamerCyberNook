@@ -66,9 +66,14 @@ call npm run build
 if errorlevel 1 goto :error
 popd
 
-if exist "%OUT_DIR%\web" rmdir /s /q "%OUT_DIR%\web"
-mkdir "%OUT_DIR%\web"
-xcopy "%ROOT_DIR%\frontend\dist" "%OUT_DIR%\web" /e /i /y >nul
+if exist "%OUT_DIR%\static\assets" rmdir /s /q "%OUT_DIR%\static\assets"
+if exist "%OUT_DIR%\static\index.html" del /q "%OUT_DIR%\static\index.html"
+if exist "%OUT_DIR%\static\favicon.svg" del /q "%OUT_DIR%\static\favicon.svg"
+if not exist "%OUT_DIR%\static" mkdir "%OUT_DIR%\static"
+xcopy "%ROOT_DIR%\frontend\dist" "%OUT_DIR%\static" /e /i /y >nul
+
+if not exist "%OUT_DIR%\init" mkdir "%OUT_DIR%\init"
+copy /y "%ROOT_DIR%\init\ip2region.xdb" "%OUT_DIR%\init\ip2region.xdb" >nul
 
 :skip_frontend
 echo.

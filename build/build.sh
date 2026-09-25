@@ -48,10 +48,13 @@ if [ "${SKIP_FRONTEND:-0}" != "1" ]; then
         npm install --no-audit --no-fund
         npm run build
     )
-    rm -rf "$OUT_DIR/web"
-    mkdir -p "$OUT_DIR/web"
-    cp -r "$ROOT_DIR/frontend/dist/." "$OUT_DIR/web/"
+    rm -rf "$OUT_DIR/static/assets" "$OUT_DIR/static/index.html" "$OUT_DIR/static/favicon.svg"
+    mkdir -p "$OUT_DIR/static"
+    cp -r "$ROOT_DIR/frontend/dist/." "$OUT_DIR/static/"
 fi
+
+mkdir -p "$OUT_DIR/init"
+cp -f "$ROOT_DIR/init/ip2region.xdb" "$OUT_DIR/init/ip2region.xdb"
 
 echo
 echo "构建完成,输出目录: $OUT_DIR"

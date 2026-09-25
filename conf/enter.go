@@ -16,6 +16,7 @@ type Config struct {
 	Email         Email         `yaml:"email"`
 	AI            AI            `yaml:"ai"`
 	ObjectStorage ObjectStorage `yaml:"objectStorage"`
+	Static        Static        `yaml:"static"`
 	Site          Site          `yaml:"site"`
 	QQ            QQ            `yaml:"qq" json:"qq"`
 }

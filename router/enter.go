@@ -3,6 +3,9 @@ package router
 
 import (
 	_ "embed"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/middleware"
@@ -17,7 +20,26 @@ func InitRouter() *gin.Engine {
 	gin.SetMode(global.Config.System.RunMode) //设置gin模式
 	r := gin.Default()
 
-	r.Static("/web", "static") //静态文件目录,注册个路由到时候写网页?而且还可以用于获取图片//TODO:后期把这个路径移到配置里,不要写死在代码里
+	//注册静态资源与前端路由,作用相当于Nginx
+	static := global.Config.Static
+	var spaIndexFile string
+	if static.Dir != "" {
+		if static.Index != "" {
+			spaIndexFile = filepath.Join(static.Dir, static.Index)
+		}
+		if static.WebPrefix != "" {
+			r.Static(static.WebPrefix, static.Dir) //静态文件目录,可用于获取图片等
+		}
+		if static.AssetsPrefix != "" {
+			r.Static(static.AssetsPrefix, filepath.Join(static.Dir, "assets")) //构建产物里的 js/css
+		}
+		if static.Favicon != "" {
+			r.StaticFile("/favicon.svg", filepath.Join(static.Dir, static.Favicon))
+		}
+		if spaIndexFile != "" {
+			r.StaticFile("/", spaIndexFile) //前端 SPA 直接由后端托管,http://host:8080/
+		}
+	}
 
 	nr := r.Group("/api") //TODO:测试使用无前缀api,开发完成了要给app组加上/api的前缀,nr := r.Group("/api")这样
 
@@ -52,9 +74,23 @@ func InitRouter() *gin.Engine {
 	FriendRouter(nr)
 	UserFollowRouter(nr) //关注/粉丝/好友
 
-	//硬编码的HTML内容,前端没有处理好时的保底措施
-	r.NoRoute(func(ctx *gin.Context) { //自定义的404页面
-		ctx.Data(404, "text/html; charset=utf-8", []byte(UnFoundPage))
+	r.NoRoute(func(ctx *gin.Context) { //没命中任何路由时的兜底
+		path := ctx.Request.URL.Path
+		//接口和后端静态资源不存在:返回内置的404页面
+		if strings.HasPrefix(path, "/api") || (static.WebPrefix != "" && strings.HasPrefix(path, static.WebPrefix)) {
+			ctx.Data(404, "text/html; charset=utf-8", []byte(UnFoundPage))
+			return
+		}
+		//其余路径交给前端路由(history模式),刷新 /u/1 这类页面才不会404
+		if spaIndexFile == "" {
+			ctx.Data(404, "text/html; charset=utf-8", []byte(UnFoundPage))
+			return
+		}
+		if _, err := os.Stat(spaIndexFile); err != nil {
+			ctx.Data(404, "text/html; charset=utf-8", []byte(UnFoundPage))
+			return
+		}
+		ctx.File(spaIndexFile)
 	})
 
 	return r
