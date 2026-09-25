@@ -1768,7 +1768,7 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 | 文章状态 | 枚举修正：0=草稿、1=审核中、2=已发布、3=已下线 |
 | 收藏夹更新 | 修复更新不生效问题；新增 `isPublic` 收藏夹级开关 |
 | 收藏夹详情 | 新增 `GET /api/article/collect/folder/:id` |
-| 收藏夹权限 | 非本人访问仅取决于该收藏夹 `isPublic`；用户级 `openCollect` 已废弃 |
+| 收藏夹权限 | 非本人访问仅取决于该收藏夹 `isPublic`；用户级 `openCollect` 已移除 |
 | AI 点评 | `aiQuality`/`aiAbstract` 迁到扩展附录表，详情以 `articleAddition` 对象返回（含 `aiModel`）；新增配置 `ai.auto_comment` 定时补全 |
 
 ---
