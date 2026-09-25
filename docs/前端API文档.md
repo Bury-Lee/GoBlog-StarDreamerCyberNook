@@ -1,7 +1,7 @@
 # GoBlog 前端 API 文档
 
 > 基于 `Gin + GORM + Redis + Elasticsearch` 的后端。所有接口前缀为 `/api`。
-> 静态资源通过 `/web` 暴露。
+> 静态资源默认通过 `/web` 暴露（由 `setting.yaml` 的 `static` 段配置，留空则由 Nginx 等外部服务托管）。
 
 ---
 
@@ -67,11 +67,14 @@ AccessToken 过期后调用刷新接口获取新 Token。
   "code": 200,
   "data": {
     "list": [...],
-    "count": 100
+    "count": 100,
+    "capped": false
   },
   "message": "成功"
 }
 ```
+
+> `count` 为满足条件的总数；当总数超过封顶阈值（默认 `1000`）时，`count` 只返回到阈值且 `capped = true`，前端应显示 `>count`（如"共 >1000 条"）。
 
 ---
 
@@ -404,7 +407,7 @@ Authorization: Bearer <RefreshToken>
 ```
 
 > 若启用 AI 审核，昵称/简介/标签/联系方式会被 AI 审核，不通过则拒绝更新。
-> **变更**：`openCollect` 已废弃并不再接收，收藏夹公开请使用 `PUT /api/article/collect/folder` 的 `isPublic`。
+> **变更**：`openCollect` 字段已移除（不再接收、不再返回），收藏夹公开请使用 `PUT /api/article/collect/folder` 的 `isPublic`。
 
 ---
 
@@ -1851,8 +1854,8 @@ name 取值：`site` / `email` / `qq` / `objectStorage` / `ai`
 | AI 点评 | `aiQuality`/`aiAbstract` 迁到扩展附录表，详情以 `articleAddition` 对象返回（含 `aiModel`）；新增配置 `ai.auto_comment` 定时补全 |
 | 用户搜索 | `/api/user/list` 支持 `userID` 精确匹配；`key` 仅模糊匹配昵称（不再搜简介） |
 | 反馈墙 | 新增 `POST /api/feedback`（可匿名）、`GET /api/feedback`（全站公开）、`PUT /api/feedback/:id`（管理员，返回更新后的条目） |
-| 数量封顶 | 分页接口新增 `capped` 字段，总数超过阈值时前端显示 `>count`（评论列表阈值为 1000） |
+| 数量封顶 | 分页接口 `count` 封顶（默认阈值 `1000`），新增 `capped` 字段，超过阈值时前端显示 `>count` |
 
 ---
 
-*文档更新时间：2026-09-25*
+*文档更新时间：2026-09-26*
