@@ -22,6 +22,7 @@
               <el-icon><Folder /></el-icon>
               <span class="sd-ellipsis collect-side__name">{{ folder.title }}</span>
               <el-tag v-if="folder.isDefault" size="small" type="info">默认</el-tag>
+              <el-tag v-else-if="!folder.isPublic" size="small" type="warning">私密</el-tag>
               <template v-if="isSelf">
                 <el-icon class="collect-side__op" @click.stop="openEdit(folder)"><EditPen /></el-icon>
                 <el-icon
@@ -88,6 +89,10 @@
         <el-form-item label="封面">
           <ImageUploader v-model="folderForm.cover" :width="120" :height="90" />
         </el-form-item>
+        <el-form-item v-if="editingFolder" label="公开">
+          <el-switch v-model="folderForm.isPublic" />
+          <span class="sd-dim" style="margin-left: 8px">关闭后仅自己可见</span>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -138,6 +143,7 @@ const folderForm = reactive({
   title: '',
   abstract: '',
   cover: '',
+  isPublic: true,
 })
 
 const ownerID = computed(() => Number(route.query.user || userStore.userId || 0))
@@ -210,6 +216,7 @@ function openCreate(): void {
   folderForm.title = ''
   folderForm.abstract = ''
   folderForm.cover = ''
+  folderForm.isPublic = true
   dialogVisible.value = true
 }
 
@@ -218,6 +225,7 @@ function openEdit(folder: CollectModel): void {
   folderForm.title = folder.title
   folderForm.abstract = folder.abstract
   folderForm.cover = folder.cover
+  folderForm.isPublic = folder.isPublic
   dialogVisible.value = true
 }
 
@@ -234,6 +242,7 @@ async function submitFolder(): Promise<void> {
         title: folderForm.title.trim(),
         abstract: folderForm.abstract,
         cover: folderForm.cover,
+        isPublic: folderForm.isPublic,
       })
       ElMessage.success('收藏夹已更新')
     } else {

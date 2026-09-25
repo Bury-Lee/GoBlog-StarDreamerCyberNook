@@ -53,7 +53,7 @@ export function fetchUserBaseInfo(id: number, options?: SdRequestConfig): Promis
   return http.get<UserBaseInfo>(`/user/info/${id}`, undefined, options)
 }
 
-export function fetchUserList(params?: PageParams): Promise<ListData<UserListItem>> {
+export function fetchUserList(params?: PageParams & { userID?: number }): Promise<ListData<UserListItem>> {
   return http.get<ListData<UserListItem>>('/user/list', params as Record<string, unknown>)
 }
 

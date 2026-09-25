@@ -17,6 +17,7 @@ import type {
   CategoryModel,
   CategoryPayload,
   CollectFolderPayload,
+  CollectFolderDetail,
   CollectModel,
   CollectPayload,
   ListData,
@@ -116,6 +117,10 @@ export function fetchCollectFolders(
   params: PageParams & { id: number },
 ): Promise<ListData<CollectModel>> {
   return http.get<ListData<CollectModel>>('/article/collect/folder', params as unknown as Record<string, unknown>)
+}
+
+export function fetchCollectFolderDetail(id: number): Promise<CollectFolderDetail> {
+  return http.get<CollectFolderDetail>(`/article/collect/folder/${id}`)
 }
 
 export function createCollectFolder(payload: CollectFolderPayload): Promise<unknown> {

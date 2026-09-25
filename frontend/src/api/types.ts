@@ -7,6 +7,8 @@ export interface ApiResult<T = unknown> {
 export interface ListData<T> {
   list: T[]
   count: number
+  /** 总数是否被后端封顶;为 true 时前端显示 ">count" */
+  capped?: boolean
 }
 
 export interface PageParams {
@@ -77,7 +79,6 @@ export interface UserDetail {
   contactInfo: Record<string, string> | null
   role: number
   updateUsernameDate: string | null
-  openCollect: boolean
   openFollow: boolean
   openFans: boolean
   homeStyleID: number
@@ -110,7 +111,6 @@ export interface UserInfoUpdatePayload {
   nickName?: string | null
   Age?: number | null
   contactInfo?: Record<string, string> | null
-  openCollect?: boolean | null
   openFollow?: boolean | null
   openFans?: boolean | null
   homeStyleID?: number | null
@@ -190,8 +190,14 @@ export interface ArticleModel extends BaseModel {
   collectCount: number
   openComment: boolean
   status: number
+}
+
+export interface ArticleAddition {
+  articleID: number
+  adminComment: string
   aiQuality: string
   aiAbstract: string
+  aiModel: string
 }
 
 export interface ArticleListResponse extends ArticleModel {
@@ -214,6 +220,7 @@ export interface ArticleDetailResponse extends ArticleModel {
   username: string
   nickname: string
   userAvatar: string
+  articleAddition?: ArticleAddition | null
 }
 
 export interface ArticleInteraction {
@@ -315,6 +322,11 @@ export interface CollectModel extends BaseModel {
   articleList: unknown[] | null
   userID: number
   isDefault: boolean
+  isPublic: boolean
+}
+
+export interface CollectFolderDetail extends CollectModel {
+  articleCount: number
 }
 
 export interface CollectPayload {
@@ -327,6 +339,7 @@ export interface CollectFolderPayload {
   title?: string | null
   abstract?: string | null
   cover?: string | null
+  isPublic?: boolean | null
 }
 
 export interface CommentModel extends BaseModel {
@@ -612,4 +625,41 @@ export interface AIConfig {
   nickName: string
   avatar: string
   platform: string
+}
+
+// ===== 反馈墙 =====
+export type FeedbackType = 0 | 1 | 2 | 3 // 0其他 1功能建议 2问题反馈 3内容举报
+export type FeedbackStatus = 0 | 1 | 2 | 3 // 0待处理 1已采纳未处理 2正在处理 3已处理
+
+export interface FeedbackItem {
+  id: number
+  createdAt: string
+  updatedAt?: string
+  userID?: number
+  isAnonymous: boolean
+  content: string
+  type: FeedbackType
+  status: FeedbackStatus
+  reply: string
+  /** 仅管理员可见 */
+  contact?: string
+  /** 仅管理员可见 */
+  handlerID?: number
+}
+
+export interface FeedbackCreatePayload {
+  content: string
+  contact?: string
+  type?: FeedbackType
+  isAnonymous?: boolean
+}
+
+export interface FeedbackListQuery extends PageParams {
+  status?: FeedbackStatus
+  type?: FeedbackType
+}
+
+export interface FeedbackHandlePayload {
+  status: FeedbackStatus
+  reply?: string
 }

@@ -78,10 +78,6 @@
 
           <el-tab-pane label="隐私设置" name="privacy">
             <el-form label-width="140px" class="settings-form">
-              <el-form-item label="公开收藏夹">
-                <el-switch v-model="privacyForm.openCollect" />
-                <span class="settings-hint sd-dim">关闭后他人无法查看你的收藏夹</span>
-              </el-form-item>
               <el-form-item label="公开关注列表">
                 <el-switch v-model="privacyForm.openFollow" />
                 <span class="settings-hint sd-dim">关闭后他人无法查看你的关注</span>
@@ -221,7 +217,6 @@ const profileRules: FormRules = {
 }
 
 const privacyForm = reactive({
-  openCollect: true,
   openFollow: true,
   openFans: true,
 })
@@ -253,7 +248,6 @@ function syncFromProfile(): void {
   profileForm.abstract = profile.abstract || ''
   profileForm.likeTags = [...(profile.likeTags || [])]
   contactRows.value = Object.entries(profile.contactInfo || {}).map(([key, value]) => ({ key, value }))
-  privacyForm.openCollect = profile.openCollect
   privacyForm.openFollow = profile.openFollow
   privacyForm.openFans = profile.openFans
 }
@@ -325,7 +319,6 @@ async function savePrivacy(): Promise<void> {
   savingPrivacy.value = true
   try {
     await userStore.updateProfile({
-      openCollect: privacyForm.openCollect,
       openFollow: privacyForm.openFollow,
       openFans: privacyForm.openFans,
     })

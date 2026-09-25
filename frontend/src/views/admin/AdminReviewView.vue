@@ -85,8 +85,8 @@
           {{ previewArticle.nickname || previewArticle.username || '未知用户' }} ·
           {{ formatDate(previewArticle.createdAt) }}
         </div>
-        <p v-if="previewArticle.aiAbstract" class="review-preview__ai">
-          AI 摘要:{{ previewArticle.aiAbstract }}
+        <p v-if="previewArticle.articleAddition?.aiAbstract" class="review-preview__ai">
+          AI 摘要:{{ previewArticle.articleAddition?.aiAbstract }}
         </p>
         <div class="article-content review-preview__content" v-html="previewHtml" />
       </div>

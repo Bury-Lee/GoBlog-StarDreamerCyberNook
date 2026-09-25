@@ -93,6 +93,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/about/AboutView.vue'),
         meta: { title: '关于' },
       },
+      {
+        path: 'feedback',
+        name: 'feedback',
+        component: () => import('@/views/feedback/FeedbackWallView.vue'),
+        meta: { title: '功能反馈' },
+      },
     ],
   },
   {

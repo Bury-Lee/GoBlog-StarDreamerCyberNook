@@ -64,7 +64,7 @@
                 />
               </header>
 
-              <div v-if="article.aiAbstract || article.aiQuality" class="detail-view__ai">
+              <div v-if="article.articleAddition?.aiAbstract || article.articleAddition?.aiQuality" class="detail-view__ai">
                 <div class="detail-view__ai-head">
                   <el-icon><MagicStick /></el-icon>
                   <span>AI 摘要</span>
@@ -72,7 +72,7 @@
                     质量评级 {{ aiScore }}
                   </el-tag>
                 </div>
-                <div v-if="article.aiAbstract" class="detail-view__ai-text" v-html="aiAbstractHtml" />
+                <div v-if="article.articleAddition?.aiAbstract" class="detail-view__ai-text" v-html="aiAbstractHtml" />
                 <div v-if="aiComment" class="detail-view__ai-comment">
                   <span class="detail-view__ai-comment-label">简评</span>
                   <div class="detail-view__ai-text" v-html="aiCommentHtml" />
@@ -271,10 +271,10 @@ const articleID = computed(() => Number(route.params.id))
 const isOwner = computed(() => Boolean(article.value && userStore.userId === article.value.userID))
 
 // 后端 aiQuality 是一整段文本(如 "评级:8/10分\n简评:..."),这里拆成短标签与简评正文
-const aiQualityParts = computed(() => parseAiQuality(article.value?.aiQuality))
+const aiQualityParts = computed(() => parseAiQuality(article.value?.articleAddition?.aiQuality))
 const aiScore = computed(() => aiQualityParts.value.score)
 const aiComment = computed(() => aiQualityParts.value.comment)
-const aiAbstractHtml = computed(() => renderMarkdown(article.value?.aiAbstract || ''))
+const aiAbstractHtml = computed(() => renderMarkdown(article.value?.articleAddition?.aiAbstract || ''))
 const aiCommentHtml = computed(() => renderMarkdown(aiComment.value))
 
 async function loadArticle(): Promise<void> {

@@ -10,15 +10,29 @@
       </router-link>
 
       <nav class="app-header__nav">
-        <router-link
-          v-for="item in navItems"
-          :key="item.name"
-          :to="{ name: item.name }"
-          class="app-header__nav-item"
-          :class="{ 'is-active': isActive(item.name) }"
-        >
-          {{ item.label }}
-        </router-link>
+        <template v-for="item in navItems" :key="item.name">
+          <el-dropdown v-if="item.children" trigger="hover" @command="goName">
+            <span class="app-header__nav-item" :class="{ 'is-active': isGroupActive(item) }">
+              {{ item.label }}
+              <el-icon class="app-header__nav-caret"><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-for="child in item.children" :key="child.name" :command="child.name">
+                  {{ child.label }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <router-link
+            v-else
+            :to="{ name: item.name }"
+            class="app-header__nav-item"
+            :class="{ 'is-active': isActive(item.name) }"
+          >
+            {{ item.label }}
+          </router-link>
+        </template>
       </nav>
 
       <div class="app-header__actions">
@@ -143,14 +157,37 @@ const keyword = ref('')
 const logoFailed = ref(false)
 const menuOpen = ref(false)
 
-const navItems = computed(() => {
-  const items = [
-    { name: 'home', label: '首页' },
-    { name: 'articles', label: '文章' },
-    { name: 'about', label: '关于' },
-  ]
-  return items
-})
+interface NavChild {
+  name: string
+  label: string
+}
+
+interface NavItem {
+  name: string
+  label: string
+  children?: NavChild[]
+}
+
+const navItems = computed<NavItem[]>(() => [
+  { name: 'home', label: '首页' },
+  { name: 'articles', label: '文章' },
+  {
+    name: 'about-group',
+    label: '关于',
+    children: [
+      { name: 'about', label: '关于本站' },
+      { name: 'feedback', label: '功能反馈' },
+    ],
+  },
+])
+
+function goName(name: string): void {
+  router.push({ name })
+}
+
+function isGroupActive(item: NavItem): boolean {
+  return Boolean(item.children?.some((child) => isActive(child.name)))
+}
 
 function isActive(name: string): boolean {
   if (name === 'articles') {
