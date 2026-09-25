@@ -70,7 +70,7 @@ func (FriendApi) FriendLinkListView(c *gin.Context) {
 		}
 	}
 
-	list, count, _ := common.ListQuery(model, common.Options{
+	list, count, _, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
 	})
@@ -134,7 +134,7 @@ func (FriendApi) FriendPromotionListView(c *gin.Context) {
 		}
 	}
 
-	list, count, _ := common.ListQuery(model, common.Options{
+	list, count, _, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
 	})

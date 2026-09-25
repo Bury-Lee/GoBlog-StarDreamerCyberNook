@@ -59,7 +59,7 @@ func (FollowApi) FollowerListView(c *gin.Context) { //迟点检查一下
 
 	// 执行通用列表查询方法
 	// 粉丝 = 关注目标用户的记录,条件是focus_user_id等于目标用户ID(原实现用user_id查成了关注列表)
-	list, count, err := common.ListQuery[models.UserFollowModel](
+	list, count, _, err := common.ListQuery[models.UserFollowModel](
 		models.UserFollowModel{FocusUserID: req.UserID},
 		option,
 	)

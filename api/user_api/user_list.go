@@ -32,7 +32,7 @@ func (UserApi) UserListView(c *gin.Context) {
 	options.Likes = []string{"nick_name", "abstract"}
 	options.DefaultOrder = "id desc"
 	options.AllowedOrders = []string{"id", "created_at", "last_login_time", "age"}
-	list, count, err := common.ListQuery[models.UserModel](models.UserModel{}, options)
+	list, count, _, err := common.ListQuery[models.UserModel](models.UserModel{}, options)
 	if err != nil {
 		logrus.Errorf("查询用户列表失败 %s", err)
 		response.FailWithMsg("查询失败", c)

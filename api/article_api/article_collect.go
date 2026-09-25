@@ -293,7 +293,7 @@ func (ArticleApi) CollectListView(c *gin.Context) { //先看看用户有没有�
 	option.DefaultOrder = "created_at desc"
 	option.AllowedOrders = []string{"id", "created_at"}
 
-	data, count, err := common.ListQuery(query, option)
+	data, count, _, err := common.ListQuery(query, option)
 	if err != nil {
 		response.FailWithMsg("查询收藏夹列表失败", c)
 		return
@@ -357,7 +357,7 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 	option.Likes = []string{"title", "abstract"}                                                 //只允许模糊匹配文章标题和摘要
 	option.DefaultOrder = sql.ConvertSliceOrderSql(articleIDs)                                   //保持收藏时间倒序
 	option.AllowedOrders = []string{"id", "created_at", "look_count", "digg_count", "comment_count", "collect_count"}
-	data, count, err := common.ListQuery(models.ArticleModel{}, option)
+	data, count, _, err := common.ListQuery(models.ArticleModel{}, option)
 	if err != nil {
 		response.FailWithMsg("查询收藏夹文章列表失败", c)
 		return

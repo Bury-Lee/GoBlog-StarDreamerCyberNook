@@ -31,7 +31,7 @@ func (ArticleApi) ArticleReviewListView(c *gin.Context) {
 	if req.UserID != 0 {
 		option.Where = option.Where.Where("user_id = ?", req.UserID)
 	}
-	list, count, err := common.ListQuery(models.ArticleModel{}, option)
+	list, count, _, err := common.ListQuery(models.ArticleModel{}, option)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return

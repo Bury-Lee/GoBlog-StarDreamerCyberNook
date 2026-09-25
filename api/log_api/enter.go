@@ -47,7 +47,7 @@ func (LogApi) LogListView(c *gin.Context) {
 		query = query.Where("login_status = ?", *req.LoginStatus)
 	}
 
-	list, count, err := common.ListQuery[models.LogModel](models.LogModel{
+	list, count, _, err := common.ListQuery[models.LogModel](models.LogModel{
 		UserID:      req.UserID,
 		LogType:     req.LogType,
 		Level:       req.Level,

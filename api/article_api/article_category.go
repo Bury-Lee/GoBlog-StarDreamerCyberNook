@@ -113,7 +113,7 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 		response.FailWithMsg("类型错误", c)
 		return
 	}
-	_list, count, _ := common.ListQuery(models.CategoryModel{
+	_list, count, _, _ := common.ListQuery(models.CategoryModel{
 		UserID: req.UserID,
 	}, common.Options{
 		PageInfo:      req.PageInfo,

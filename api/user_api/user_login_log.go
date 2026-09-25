@@ -67,7 +67,7 @@ func (UserApi) UserLoginListView(c *gin.Context) {
 		preloads = []string{"UserModel"}
 	}
 
-	_list, count, _ := common.ListQuery[models.UserLoginModel](models.UserLoginModel{
+	_list, count, _, _ := common.ListQuery[models.UserLoginModel](models.UserLoginModel{
 		UserID: req.UserID,
 		IP:     req.Ip,
 		Addr:   req.Addr,

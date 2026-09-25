@@ -123,7 +123,7 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 		options.Where = global.DB.Where("status = ?", *req.Status)
 	}
 
-	_list, count, _ := common.ListQuery(models.ArticleModel{
+	_list, count, _, _ := common.ListQuery(models.ArticleModel{
 		UserID:     req.UserID,
 		CategoryID: req.CategoryID,
 	}, options)

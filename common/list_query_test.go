@@ -125,7 +125,7 @@ func TestListQuery(t *testing.T) {
 		options := Options{
 			PageInfo: PageInfo{Page: 1, Limit: 2},
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -145,7 +145,7 @@ func TestListQuery(t *testing.T) {
 		options := Options{
 			PageInfo: PageInfo{Page: 1, Limit: 10},
 		}
-		list, count, err := ListQuery(&TestModel{Age: 25}, options)
+		list, count, _, err := ListQuery(&TestModel{Age: 25}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -162,7 +162,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo: PageInfo{Page: 1, Limit: 10, Key: "li"},
 			Likes:    []string{"name"},
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -179,7 +179,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo: PageInfo{Page: 1, Limit: 10, Key: "a"},
 			Likes:    []string{"name", "age"}, // Sqlite会将age转为字符串匹配
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -196,7 +196,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo:      PageInfo{Page: 1, Limit: 10, Order: "age asc"},
 			AllowedOrders: []string{"age", "id"},
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -213,7 +213,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo:      PageInfo{Page: 1, Limit: 10, Order: "age asc,(select 1)"},
 			AllowedOrders: []string{"age", "id"},
 		}
-		list, _, err := ListQuery(TestModel{}, options)
+		list, _, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -227,7 +227,7 @@ func TestListQuery(t *testing.T) {
 		options := Options{
 			PageInfo: PageInfo{Page: 1, Limit: 10, Order: "age asc"},
 		}
-		list, _, err := ListQuery(TestModel{}, options)
+		list, _, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -241,7 +241,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo:     PageInfo{Page: 1, Limit: 10},
 			DefaultOrder: "age asc",
 		}
-		list, _, err := ListQuery(TestModel{}, options)
+		list, _, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -255,7 +255,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo: PageInfo{Page: 1, Limit: 10},
 			Where:    global.DB.Where("age > ?", 25),
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -272,7 +272,7 @@ func TestListQuery(t *testing.T) {
 			PageInfo: PageInfo{Page: 1, Limit: 10},
 			Preloads: []string{"Profile"},
 		}
-		list, count, err := ListQuery(TestModel{}, options)
+		list, count, _, err := ListQuery(TestModel{}, options)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}
@@ -289,13 +289,13 @@ func TestListQuery(t *testing.T) {
 		options1 := Options{
 			PageInfo: PageInfo{Page: 1, Limit: 2},
 		}
-		list1, _, _ := ListQuery(TestModel{}, options1)
+		list1, _, _, _ := ListQuery(TestModel{}, options1)
 
 		// 游标模式，应该返回小于这个id的数据
 		options2 := Options{
 			PageInfo: PageInfo{EndId: list1[len(list1)-1].ID, Limit: 2},
 		}
-		list2, count2, err := ListQuery(TestModel{}, options2)
+		list2, count2, _, err := ListQuery(TestModel{}, options2)
 		if err != nil {
 			t.Fatalf("查询失败: %v", err)
 		}

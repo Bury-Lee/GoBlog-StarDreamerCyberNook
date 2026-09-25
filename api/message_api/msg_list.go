@@ -43,7 +43,7 @@ func (MessageApi) SiteMessageListView(c *gin.Context) { //可以在读取之后,
 	Options.PageInfo = req.PageInfo
 	Options.Where = query
 	Options.AllowedOrders = []string{"id", "created_at"}
-	list, count, err := common.ListQuery[models.MessageModel](
+	list, count, _, err := common.ListQuery[models.MessageModel](
 		models.MessageModel{RevUserID: claim.UserID},
 		Options,
 	)

@@ -53,6 +53,7 @@ type Options struct { //可用选项,目前有模糊匹配和预加载,以后可
 	Where         *gorm.DB //定制化查询
 	DefaultOrder  string   //其他查询参数,主要是排序,前端没有传入就使用这个默认排序参数
 	AllowedOrders []string //允许的排序字段白名单,前端传入的Order必须命中白名单,否则忽略
+	CountCap      int      //总数封顶阈值,>0时最多统计该数量的记录(count 返回值不超过 CountCap,并以 capped 标志表示实际更多),避免大表 COUNT(*) 全表扫描
 }
 
 // TODO:AllowedOrders []string改为map[string]{}类型，提高效率
@@ -95,14 +96,36 @@ func sanitizeOrder(order string, allowed []string) string {
 	return strings.Join(safeParts, ",")
 }
 
+// countWithCap 统计满足条件的记录数
+// cap > 0 时最多只读取 cap+1 行来判断是否超过阈值,避免大表 COUNT(*) 全表扫描
+// 返回:count 封顶后的数量, capped 是否被截断(实际数量超过 cap)
+func countWithCap(countQuery *gorm.DB, cap int) (count int, capped bool, err error) {
+	if cap > 0 {
+		var ids []uint
+		if err = countQuery.Select("id").Limit(cap + 1).Find(&ids).Error; err != nil {
+			return 0, false, err
+		}
+		if len(ids) > cap {
+			return cap, true, nil
+		}
+		return len(ids), false, nil
+	}
+	var total int64
+	if err = countQuery.Count(&total).Error; err != nil {
+		return 0, false, err
+	}
+	return int(total), false, nil
+}
+
 // ListQuery 通用分页查询函数
 // 参数:model - 模型实例,用于指定查询的表
 // 参数:option - 查询的配置选项
 // 返回:list - 查询结果列表
-// 返回:count - 满足条件的总记录数
+// 返回:count - 满足条件的总记录数(当 CountCap>0 时会被封顶)
+// 返回:capped - 总数是否被 CountCap 截断(即实际数量大于返回的 count)
 // 返回:err - 错误信息
 // 说明:支持基础查询,模糊匹配,定制化查询,预加载,排序分页,游标分页
-func ListQuery[T any](model T, option Options) (list []T, count int, err error) {
+func ListQuery[T any](model T, option Options) (list []T, count int, capped bool, err error) {
 	// 基础查询
 	baseQuery := global.DB.Model(model).Where(model)
 
@@ -149,28 +172,22 @@ func ListQuery[T any](model T, option Options) (list []T, count int, err error) 
 		finalQuery = finalQuery.Where("id < ?", option.PageInfo.EndId)
 
 		// 查询总数（基于原始条件，不包含游标过滤）
-		var total int64
-		countQuery := baseQuery.Session(&gorm.Session{})
-		if err = countQuery.Count(&total).Error; err != nil {
-			return list, 0, err
+		count, capped, err = countWithCap(baseQuery.Session(&gorm.Session{}), option.CountCap)
+		if err != nil {
+			return list, 0, false, err
 		}
-		count = int(total)
 
 		err = finalQuery.Limit(limit).Find(&list).Error
-		return list, count, err
+		return list, count, capped, err
 	}
-
-	//TODO:统计太耗时且无用了,考虑改进
 
 	// 普通分页模式
-	var total int64
-	countQuery := baseQuery.Session(&gorm.Session{})
-	if err = countQuery.Count(&total).Error; err != nil {
-		return list, 0, err
+	count, capped, err = countWithCap(baseQuery.Session(&gorm.Session{}), option.CountCap)
+	if err != nil {
+		return list, 0, false, err
 	}
-	count = int(total)
 
 	offset := option.PageInfo.GetOffset()
 	err = finalQuery.Offset(offset).Limit(limit).Find(&list).Error
-	return list, count, err
+	return list, count, capped, err
 }

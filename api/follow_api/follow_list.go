@@ -57,7 +57,7 @@ func (FollowApi) FollowUserListView(c *gin.Context) {
 		}
 	}
 
-	_list, count, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
+	_list, count, _, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
 		UserID: req.UserID, //是这样吗?
 	}, common.Options{
 		PageInfo: req.PageInfo,

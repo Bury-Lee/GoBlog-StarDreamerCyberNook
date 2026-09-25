@@ -85,6 +85,12 @@ func OkWithList(list any, count int, c *gin.Context) {
 	Response{SuccessCode, map[string]any{"list": list, "count": count}, "成功"}.Json(c)
 }
 
+// OkWithListCapped 返回分页列表,并附带总数是否被截断的标志
+// capped=true 表示实际总数超过返回的 count,前端应显示 ">count"
+func OkWithListCapped(list any, count int, capped bool, c *gin.Context) {
+	Response{SuccessCode, map[string]any{"list": list, "count": count, "capped": capped}, "成功"}.Json(c)
+}
+
 func Fail(code Code, msg string, data any, c *gin.Context) {
 	Response{Code: code, Data: data, Msg: msg}.Json(c)
 }

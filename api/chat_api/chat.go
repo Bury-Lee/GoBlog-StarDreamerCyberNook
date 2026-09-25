@@ -137,7 +137,7 @@ func (ChatApi) ChatListView(c *gin.Context) { // 查自己和指定用户的聊�
 	)
 
 	req.Order = "created_at desc"
-	_list, count, err := common.ListQuery[models.ChatModel](models.ChatModel{}, common.Options{
+	_list, count, _, err := common.ListQuery[models.ChatModel](models.ChatModel{}, common.Options{
 		PageInfo:      req.PageInfo,
 		Preloads:      []string{"SendUserModel", "RevUserModel"},
 		Where:         query,
@@ -253,7 +253,7 @@ func (ChatApi) SessionListView(c *gin.Context) { // 查我的会话列表
 
 	claims := jwts.GetClaims(c)
 
-	list, count, err := common.ListQuery[models.SessionModel](
+	list, count, _, err := common.ListQuery[models.SessionModel](
 		models.SessionModel{},
 		common.Options{
 			PageInfo:      req.PageInfo,

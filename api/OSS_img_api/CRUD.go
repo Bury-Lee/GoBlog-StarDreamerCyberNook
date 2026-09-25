@@ -173,7 +173,7 @@ func (OSSImgApi) ImageList(c *gin.Context) {
 	}
 
 	// 查询图片列表
-	_list, count, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
+	_list, count, _, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
 		PageInfo:      req,
 		Likes:         []string{"filename"},
 		AllowedOrders: []string{"id", "created_at", "size"},

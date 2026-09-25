@@ -118,7 +118,7 @@ func (ArticleApi) ArticleLookListView(c *gin.Context) { //除了可以记录浏�
 		}
 	}
 
-	_list, count, _ := common.ListQuery(models.UserArticleHistoryModel{
+	_list, count, _, _ := common.ListQuery(models.UserArticleHistoryModel{
 		UserID: req.UserID,
 	}, common.Options{
 		PageInfo:      req.PageInfo,

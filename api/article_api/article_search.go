@@ -203,7 +203,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 			if len(cacheMissIDList) > 0 {
 				// 4.1 构建查询条件,只查已发布文章,防止搜索结果里混入未发布内容
 				where := global.DB.Where("id in ? and status = ?", cacheMissIDList, models.StatusPublished)
-				modelList, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
+				modelList, _, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
 					Where:        where,
 					Preloads:     []string{"CategoryModel", "UserModel"},    // 预加载关联表
 					DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList), // 保持与传入ID顺序一致
@@ -424,7 +424,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 
 		if len(cacheMissIDList) > 0 {
 			where := global.DB.Where("id in ?", cacheMissIDList)
-			modelList, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
+			modelList, _, _, err := common.ListQuery(models.ArticleModel{}, common.Options{
 				Where:        where,
 				Preloads:     []string{"CategoryModel", "UserModel"},
 				DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList),

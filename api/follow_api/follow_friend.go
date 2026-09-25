@@ -35,7 +35,7 @@ func (FollowApi) FriendUserListView(c *gin.Context) {
 		response.FailWithMsg("请登录", c)
 		return
 	}
-	_list, count, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
+	_list, count, _, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
 		UserID: claim.UserID,
 		Friend: true,
 	}, common.Options{

@@ -36,7 +36,7 @@ func (ImageApi) ImageList(c *gin.Context) {
 	}
 
 	// 查询图片列表
-	_list, cout, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
+	_list, cout, _, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
 		PageInfo:      req,
 		Likes:         []string{"filename"}, // 支持文件名模糊搜索
 		AllowedOrders: []string{"id", "created_at", "size"},

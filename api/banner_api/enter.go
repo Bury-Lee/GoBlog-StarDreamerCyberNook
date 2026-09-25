@@ -55,7 +55,7 @@ func (BannerApi) BannerListView(c *gin.Context) {
 		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
 			var req common.PageInfo
 			c.ShouldBind(&req)
-			list, count, _ := common.ListQuery(models.BannerModel{}, common.Options{
+			list, count, _, _ := common.ListQuery(models.BannerModel{}, common.Options{
 				PageInfo:      req,
 				AllowedOrders: []string{"id", "created_at"},
 			})
@@ -83,7 +83,7 @@ func (BannerApi) BannerListView(c *gin.Context) {
 	var req common.PageInfo
 	c.ShouldBind(&req)
 
-	list, count, _ := common.ListQuery(models.BannerModel{
+	list, count, _, _ := common.ListQuery(models.BannerModel{
 		IsShow: true,
 	}, common.Options{
 		PageInfo:      req,
