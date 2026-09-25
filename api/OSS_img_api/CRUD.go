@@ -173,10 +173,11 @@ func (OSSImgApi) ImageList(c *gin.Context) {
 	}
 
 	// 查询图片列表
-	_list, count, _, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
+	_list, count, capped, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
 		PageInfo:      req,
 		Likes:         []string{"filename"},
 		AllowedOrders: []string{"id", "created_at", "size"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
@@ -191,7 +192,7 @@ func (OSSImgApi) ImageList(c *gin.Context) {
 			WebPath:    model.WebPath(),
 		})
 	}
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 // ImageRemoveView 管理员批量删除图片

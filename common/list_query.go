@@ -96,6 +96,9 @@ func sanitizeOrder(order string, allowed []string) string {
 	return strings.Join(safeParts, ",")
 }
 
+// DefaultCountCap 分页总数默认封顶阈值:列表接口未显式设置 CountCap 时使用,超过则标记 capped
+const DefaultCountCap = 1000
+
 // countWithCap 统计满足条件的记录数
 // cap > 0 时最多只读取 cap+1 行来判断是否超过阈值,避免大表 COUNT(*) 全表扫描
 // 返回:count 封顶后的数量, capped 是否被截断(实际数量超过 cap)

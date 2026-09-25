@@ -43,7 +43,8 @@ func (MessageApi) SiteMessageListView(c *gin.Context) { //可以在读取之后,
 	Options.PageInfo = req.PageInfo
 	Options.Where = query
 	Options.AllowedOrders = []string{"id", "created_at"}
-	list, count, _, err := common.ListQuery[models.MessageModel](
+	Options.CountCap = common.DefaultCountCap //总数封顶
+	list, count, capped, err := common.ListQuery[models.MessageModel](
 		models.MessageModel{RevUserID: claim.UserID},
 		Options,
 	)
@@ -51,7 +52,7 @@ func (MessageApi) SiteMessageListView(c *gin.Context) { //可以在读取之后,
 		response.FailWithMsg("查询消息失败", c)
 		return
 	}
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 
 	//把读取的消息设置为已读
 	var updateList []uint

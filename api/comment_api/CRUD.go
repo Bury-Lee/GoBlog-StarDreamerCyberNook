@@ -19,9 +19,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// commentPageCountCap 评论分页总数的封顶阈值:超过该值时接口只返回该数量并标记 capped,前端显示 ">N"
-const commentPageCountCap = 1000
-
 // 注:评论没有修改这一说,只有增删查
 type CommentCreateRequest struct {
 	Content   string `json:"content" binding:"required"`
@@ -204,7 +201,7 @@ func (CommentApi) CommentListlView(c *gin.Context) { //获取某文章的一级�
 	options.Where = global.DB.Where("article_id = ? and root_parent_id is null", req.ArticleID) //查询一级评论
 	options.DefaultOrder = "digg_count desc"                                                    //默认按点赞数降序排序
 	options.AllowedOrders = []string{"id", "created_at", "digg_count"}
-	options.CountCap = commentPageCountCap //总数封顶,避免大表 COUNT(*) 全表扫描
+	options.CountCap = common.DefaultCountCap //总数封顶,避免大表 COUNT(*) 全表扫描
 	List, count, capped, err := common.ListQuery(comments, options)
 	if err != nil { //TODO:加一个点赞增量也加上的逻辑
 		response.FailWithMsg("查询评论失败", c)
@@ -281,7 +278,7 @@ func (CommentApi) CommentChildListView(c *gin.Context) { //可以这样,评论�
 	//用户的
 	options.DefaultOrder = "digg_count desc" //默认按点赞数降序排序
 	options.AllowedOrders = []string{"id", "created_at", "digg_count"}
-	options.CountCap = commentPageCountCap //总数封顶,避免大表 COUNT(*) 全表扫描
+	options.CountCap = common.DefaultCountCap //总数封顶,避免大表 COUNT(*) 全表扫描
 	List, count, capped, err := common.ListQuery(models.CommentModel{}, options)
 	if err != nil {
 		response.FailWithMsg("查询评论失败", c)

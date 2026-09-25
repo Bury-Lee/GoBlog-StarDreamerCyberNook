@@ -67,7 +67,7 @@ func (UserApi) UserLoginListView(c *gin.Context) {
 		preloads = []string{"UserModel"}
 	}
 
-	_list, count, _, _ := common.ListQuery[models.UserLoginModel](models.UserLoginModel{
+	_list, count, capped, _ := common.ListQuery[models.UserLoginModel](models.UserLoginModel{
 		UserID: req.UserID,
 		IP:     req.Ip,
 		Addr:   req.Addr,
@@ -76,6 +76,7 @@ func (UserApi) UserLoginListView(c *gin.Context) {
 		Where:         query,
 		Preloads:      preloads,
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 
 	var list = make([]UserLoginListResponse, 0)
@@ -87,6 +88,6 @@ func (UserApi) UserLoginListView(c *gin.Context) {
 		})
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 
 }

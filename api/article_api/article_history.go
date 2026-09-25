@@ -118,13 +118,14 @@ func (ArticleApi) ArticleLookListView(c *gin.Context) { //除了可以记录浏�
 		}
 	}
 
-	_list, count, _, _ := common.ListQuery(models.UserArticleHistoryModel{
+	_list, count, capped, _ := common.ListQuery(models.UserArticleHistoryModel{
 		UserID: req.UserID,
 	}, common.Options{
 		PageInfo:      req.PageInfo,
 		Likes:         []string{"article_name"},
 		Preloads:      []string{"UserModel", "ArticleModel"},
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 
 	var list = make([]ArticleLookListResponse, 0)
@@ -141,7 +142,7 @@ func (ArticleApi) ArticleLookListView(c *gin.Context) { //除了可以记录浏�
 		})
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 
 }
 

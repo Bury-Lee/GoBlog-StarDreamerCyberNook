@@ -114,6 +114,7 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 		Preloads:      []string{"UserModel", "CategoryModel"}, //预加载用户和分类
 		DefaultOrder:  "created_at desc",
 		AllowedOrders: []string{"created_at", "look_count", "digg_count", "comment_count", "collect_count"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	}
 	if len(TopArticleIDList) > 0 {
 		options.DefaultOrder = fmt.Sprintf("%s, created_at desc", sql.ConvertSliceOrderSql(TopArticleIDList))
@@ -123,7 +124,7 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 		options.Where = global.DB.Where("status = ?", *req.Status)
 	}
 
-	_list, count, _, _ := common.ListQuery(models.ArticleModel{
+	_list, count, capped, _ := common.ListQuery(models.ArticleModel{
 		UserID:     req.UserID,
 		CategoryID: req.CategoryID,
 	}, options)
@@ -151,5 +152,5 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 	}
 	applyArticleCountDeltas(ptrs)
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }

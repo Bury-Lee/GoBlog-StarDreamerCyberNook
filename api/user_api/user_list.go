@@ -34,11 +34,12 @@ func (UserApi) UserListView(c *gin.Context) {
 	options.Likes = []string{"nick_name"} //仅按昵称模糊匹配,不搜索简介
 	options.DefaultOrder = "id desc"
 	options.AllowedOrders = []string{"id", "created_at", "last_login_time", "age"}
+	options.CountCap = common.DefaultCountCap //总数封顶
 	if req.UserID != 0 {
 		//用户名精确匹配
 		options.Where = global.DB.Where("id = ?", req.UserID)
 	}
-	list, count, _, err := common.ListQuery[models.UserModel](models.UserModel{}, options)
+	list, count, capped, err := common.ListQuery[models.UserModel](models.UserModel{}, options)
 	if err != nil {
 		logrus.Errorf("查询用户列表失败 %s", err)
 		response.FailWithMsg("查询失败", c)
@@ -53,5 +54,5 @@ func (UserApi) UserListView(c *gin.Context) {
 			Abstract: item.Abstract,
 		})
 	}
-	response.OkWithList(result, count, c)
+	response.OkWithListCapped(result, count, capped, c)
 }

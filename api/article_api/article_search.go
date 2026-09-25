@@ -207,6 +207,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 					Where:        where,
 					Preloads:     []string{"CategoryModel", "UserModel"},    // 预加载关联表
 					DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList), // 保持与传入ID顺序一致
+					CountCap:     common.DefaultCountCap,                    //总数封顶
 				})
 				if err != nil {
 					logrus.Errorf("降级搜索失败 %s", err)
@@ -428,6 +429,7 @@ func (ArticleApi) ArticleSearchView(c *gin.Context) {
 				Where:        where,
 				Preloads:     []string{"CategoryModel", "UserModel"},
 				DefaultOrder: sql.ConvertSliceOrderSql(cacheMissIDList),
+				CountCap:     common.DefaultCountCap, //总数封顶
 			})
 			if err != nil {
 				logrus.Errorf("查询文章详情失败 %s", err)

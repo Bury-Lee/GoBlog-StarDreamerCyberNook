@@ -55,11 +55,12 @@ func (FollowApi) FollowerListView(c *gin.Context) { //迟点检查一下
 		DefaultOrder:  "created_at desc",     // 默认按关注创建时间倒序排列
 		Preloads:      []string{"UserModel"}, // 预加载关联的用户信息（例如粉丝的昵称、头像等）
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	}
 
 	// 执行通用列表查询方法
 	// 粉丝 = 关注目标用户的记录,条件是focus_user_id等于目标用户ID(原实现用user_id查成了关注列表)
-	list, count, _, err := common.ListQuery[models.UserFollowModel](
+	list, count, capped, err := common.ListQuery[models.UserFollowModel](
 		models.UserFollowModel{FocusUserID: req.UserID},
 		option,
 	)
@@ -72,5 +73,5 @@ func (FollowApi) FollowerListView(c *gin.Context) { //迟点检查一下
 	// 5. 返回成功响应
 	// list: 粉丝列表数据
 	// count: 总粉丝数，用于前端分页
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }

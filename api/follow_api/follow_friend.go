@@ -35,13 +35,14 @@ func (FollowApi) FriendUserListView(c *gin.Context) {
 		response.FailWithMsg("请登录", c)
 		return
 	}
-	_list, count, _, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
+	_list, count, capped, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
 		UserID: claim.UserID,
 		Friend: true,
 	}, common.Options{
 		PageInfo:      req.PageInfo,
 		Preloads:      []string{"FocusUserModel"},
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 
 	var list = make([]FriendUserListResponse, 0)
@@ -55,5 +56,5 @@ func (FollowApi) FriendUserListView(c *gin.Context) {
 		})
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }

@@ -36,10 +36,11 @@ func (ImageApi) ImageList(c *gin.Context) {
 	}
 
 	// 查询图片列表
-	_list, cout, _, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
+	_list, cout, capped, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
 		PageInfo:      req,
 		Likes:         []string{"filename"}, // 支持文件名模糊搜索
 		AllowedOrders: []string{"id", "created_at", "size"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
@@ -54,7 +55,7 @@ func (ImageApi) ImageList(c *gin.Context) {
 			WebPath:    model.WebPath(), // 获取Web访问路径
 		})
 	}
-	response.OkWithList(list, cout, c)
+	response.OkWithListCapped(list, cout, capped, c)
 }
 
 // RemoveRequest 图片删除请求结构体

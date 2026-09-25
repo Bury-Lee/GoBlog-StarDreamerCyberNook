@@ -70,11 +70,12 @@ func (FriendApi) FriendLinkListView(c *gin.Context) {
 		}
 	}
 
-	list, count, _, _ := common.ListQuery(model, common.Options{
+	list, count, capped, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 func (FriendApi) FriendLinkRemoveView(c *gin.Context) {
@@ -134,11 +135,12 @@ func (FriendApi) FriendPromotionListView(c *gin.Context) {
 		}
 	}
 
-	list, count, _, _ := common.ListQuery(model, common.Options{
+	list, count, capped, _ := common.ListQuery(model, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at", "sort_order"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 func (FriendApi) FriendPromotionRemoveView(c *gin.Context) {

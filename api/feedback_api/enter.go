@@ -82,7 +82,7 @@ func (FeedbackApi) FeedbackWallView(c *gin.Context) {
 		PageInfo:      req.PageInfo,
 		DefaultOrder:  "created_at desc",
 		AllowedOrders: []string{"id", "created_at", "status"},
-		CountCap:      1000, //总数封顶,避免大表全表扫描
+		CountCap:      common.DefaultCountCap, //总数封顶,避免大表全表扫描
 	}
 	if req.Status != nil {
 		options.Where = global.DB.Where("status = ?", *req.Status)

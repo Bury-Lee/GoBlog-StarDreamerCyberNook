@@ -137,11 +137,12 @@ func (ChatApi) ChatListView(c *gin.Context) { // 查自己和指定用户的聊�
 	)
 
 	req.Order = "created_at desc"
-	_list, count, _, err := common.ListQuery[models.ChatModel](models.ChatModel{}, common.Options{
+	_list, count, capped, err := common.ListQuery[models.ChatModel](models.ChatModel{}, common.Options{
 		PageInfo:      req.PageInfo,
 		Preloads:      []string{"SendUserModel", "RevUserModel"},
 		Where:         query,
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 	if err != nil {
 		response.FailWithMsg("查询聊天记录失败", c)
@@ -157,7 +158,7 @@ func (ChatApi) ChatListView(c *gin.Context) { // 查自己和指定用户的聊�
 	// 如果没有消息ID，直接返回空列表
 	if len(chatIDs) == 0 {
 		var list []ChatListResponse
-		response.OkWithList(list, count, c)
+		response.OkWithListCapped(list, count, capped, c)
 		return
 	}
 
@@ -237,7 +238,7 @@ func (ChatApi) ChatListView(c *gin.Context) { // 查自己和指定用户的聊�
 		}
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 type SessionListRequest struct {
@@ -253,7 +254,7 @@ func (ChatApi) SessionListView(c *gin.Context) { // 查我的会话列表
 
 	claims := jwts.GetClaims(c)
 
-	list, count, _, err := common.ListQuery[models.SessionModel](
+	list, count, capped, err := common.ListQuery[models.SessionModel](
 		models.SessionModel{},
 		common.Options{
 			PageInfo:      req.PageInfo,
@@ -261,6 +262,7 @@ func (ChatApi) SessionListView(c *gin.Context) { // 查我的会话列表
 			Preloads:      []string{"UserModel"},
 			DefaultOrder:  "last_message_time desc",
 			AllowedOrders: []string{"id", "created_at", "last_message_time"},
+			CountCap:      common.DefaultCountCap, //总数封顶
 		},
 	)
 	if err != nil {
@@ -268,5 +270,5 @@ func (ChatApi) SessionListView(c *gin.Context) { // 查我的会话列表
 		return
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }

@@ -27,16 +27,17 @@ func (ArticleApi) ArticleReviewListView(c *gin.Context) {
 		Preloads:      []string{"UserModel"},
 		Where:         global.DB.Where("status = ?", models.StatusPending), //待审核=用户提交后等待审核的文章
 		AllowedOrders: []string{"id", "created_at", "status"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	}
 	if req.UserID != 0 {
 		option.Where = option.Where.Where("user_id = ?", req.UserID)
 	}
-	list, count, _, err := common.ListQuery(models.ArticleModel{}, option)
+	list, count, capped, err := common.ListQuery(models.ArticleModel{}, option)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return
 	}
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 type ArticleReviewRequest struct {

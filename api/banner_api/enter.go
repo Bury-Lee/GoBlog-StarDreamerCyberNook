@@ -55,11 +55,12 @@ func (BannerApi) BannerListView(c *gin.Context) {
 		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
 			var req common.PageInfo
 			c.ShouldBind(&req)
-			list, count, _, _ := common.ListQuery(models.BannerModel{}, common.Options{
+			list, count, capped, _ := common.ListQuery(models.BannerModel{}, common.Options{
 				PageInfo:      req,
 				AllowedOrders: []string{"id", "created_at"},
+				CountCap:      common.DefaultCountCap, //总数封顶
 			})
-			response.OkWithList(list, count, c)
+			response.OkWithListCapped(list, count, capped, c)
 			return
 		}
 	}
@@ -83,11 +84,12 @@ func (BannerApi) BannerListView(c *gin.Context) {
 	var req common.PageInfo
 	c.ShouldBind(&req)
 
-	list, count, _, _ := common.ListQuery(models.BannerModel{
+	list, count, capped, _ := common.ListQuery(models.BannerModel{
 		IsShow: true,
 	}, common.Options{
 		PageInfo:      req,
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 	jsonData, err := json.Marshal(list)
 	if err != nil {
@@ -95,7 +97,7 @@ func (BannerApi) BannerListView(c *gin.Context) {
 	}
 	//把数据加入缓存
 	global.RedisHotPool.Set(ctx, "banner_list", string(jsonData), 0)
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 func (BannerApi) BannerRemoveView(c *gin.Context) {

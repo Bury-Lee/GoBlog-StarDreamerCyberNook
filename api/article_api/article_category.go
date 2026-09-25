@@ -113,13 +113,14 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 		response.FailWithMsg("类型错误", c)
 		return
 	}
-	_list, count, _, _ := common.ListQuery(models.CategoryModel{
+	_list, count, capped, _ := common.ListQuery(models.CategoryModel{
 		UserID: req.UserID,
 	}, common.Options{
 		PageInfo:      req.PageInfo,
 		Likes:         []string{"title"},
 		Preloads:      preload,
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 
 	//一次性聚合统计各分类的文章数,避免Preload把分类下全部文章加载进内存
@@ -156,7 +157,7 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 		})
 	}
 
-	response.OkWithList(list, count, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 func (ArticleApi) CategoryRemoveView(c *gin.Context) {

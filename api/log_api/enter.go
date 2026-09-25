@@ -47,7 +47,7 @@ func (LogApi) LogListView(c *gin.Context) {
 		query = query.Where("login_status = ?", *req.LoginStatus)
 	}
 
-	list, count, _, err := common.ListQuery[models.LogModel](models.LogModel{
+	list, count, capped, err := common.ListQuery[models.LogModel](models.LogModel{
 		UserID:      req.UserID,
 		LogType:     req.LogType,
 		Level:       req.Level,
@@ -59,13 +59,14 @@ func (LogApi) LogListView(c *gin.Context) {
 		Where:         query,
 		Preloads:      []string{"UserModel"},
 		AllowedOrders: []string{"id", "created_at"},
+		CountCap:      common.DefaultCountCap, //总数封顶
 	})
 	if err != nil {
 		response.FailWithError(err, c)
 		return
 	}
 
-	response.OkWithList(list, int(count), c)
+	response.OkWithListCapped(list, int(count), capped, c)
 }
 
 func (LogApi) LogReadView(c *gin.Context) {

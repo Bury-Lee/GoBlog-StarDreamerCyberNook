@@ -292,14 +292,15 @@ func (ArticleApi) CollectListView(c *gin.Context) { //先看看用户有没有�
 	option.Likes = []string{"title", "abstract"} //只允许模糊匹配收藏夹名称和摘要
 	option.DefaultOrder = "created_at desc"
 	option.AllowedOrders = []string{"id", "created_at"}
+	option.CountCap = common.DefaultCountCap //总数封顶
 
-	data, count, _, err := common.ListQuery(query, option)
+	data, count, capped, err := common.ListQuery(query, option)
 	if err != nil {
 		response.FailWithMsg("查询收藏夹列表失败", c)
 		return
 	}
 	// global.DB.Where("user_id = ?", req.ID).Find(&list)
-	response.OkWithList(data, count, c)
+	response.OkWithListCapped(data, count, capped, c)
 }
 
 type CollectArticleListViewRequest struct {
@@ -357,7 +358,8 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 	option.Likes = []string{"title", "abstract"}                                                 //只允许模糊匹配文章标题和摘要
 	option.DefaultOrder = sql.ConvertSliceOrderSql(articleIDs)                                   //保持收藏时间倒序
 	option.AllowedOrders = []string{"id", "created_at", "look_count", "digg_count", "comment_count", "collect_count"}
-	data, count, _, err := common.ListQuery(models.ArticleModel{}, option)
+	option.CountCap = common.DefaultCountCap //总数封顶
+	data, count, capped, err := common.ListQuery(models.ArticleModel{}, option)
 	if err != nil {
 		response.FailWithMsg("查询收藏夹文章列表失败", c)
 		return
@@ -370,7 +372,7 @@ func (ArticleApi) CollectArticleListView(c *gin.Context) {
 	}
 	applyArticleCountDeltas(ptrs)
 
-	response.OkWithList(data, count, c)
+	response.OkWithListCapped(data, count, capped, c)
 }
 
 // CollectDetailResponse 收藏夹详情响应
