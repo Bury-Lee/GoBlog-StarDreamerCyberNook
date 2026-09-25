@@ -149,7 +149,7 @@
                 <span class="sd-panel__title">关于作者</span>
               </header>
               <div class="sd-panel__body detail-view__author-body">
-                <UserAvatar :src="article.userAvatar" :name="article.nickname" :size="54" />
+                <UserAvatar :src="article.userAvatar" :name="article.nickname" :size="54" :user-id="article.userID" />
                 <span class="detail-view__author-card-name">{{ article.nickname || article.username }}</span>
                 <router-link
                   class="sd-link detail-view__author-card-link"

@@ -208,11 +208,12 @@ import { imageUrl } from '@/api/request'
 import type { ArticleDetailResponse, ArticleUpdatePayload, CategoryListItem } from '@/api/types'
 import { articleStatusLabel, articleStatusType } from '@/utils/format'
 import { renderMarkdown, sanitizeHtml } from '@/utils/html'
-import { useSiteStore } from '@/stores'
+import { useSiteStore, useUserStore } from '@/stores'
 
 const route = useRoute()
 const router = useRouter()
 const siteStore = useSiteStore()
+const userStore = useUserStore()
 
 const mode = ref<'markdown' | 'html'>('markdown')
 const previewVisible = ref(false)
@@ -272,6 +273,12 @@ async function loadArticle(): Promise<void> {
   if (!isEdit.value) return
   try {
     const data = await fetchArticleDetail(articleID.value)
+    //非作者且非管理员不允许编辑,直接拦截(避免通过直接访问 URL 进入他人文章编辑页)
+    if (userStore.userId !== data.userID && !userStore.isAdmin) {
+      ElMessage.error('你没有权限编辑这篇文章')
+      router.replace({ name: 'article-detail', params: { id: articleID.value } })
+      return
+    }
     article.value = data
     form.title = data.title
     form.abstract = data.abstract

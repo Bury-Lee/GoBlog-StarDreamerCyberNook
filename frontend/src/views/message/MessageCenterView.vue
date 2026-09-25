@@ -62,7 +62,7 @@
                   @click.stop
                   @change="() => toggleSelect(item.id)"
                 />
-                <UserAvatar :src="item.actionUserAvatar" :name="item.actionUserNickname" :size="38" />
+                <UserAvatar :src="item.actionUserAvatar" :name="item.actionUserNickname" :size="38" :user-id="item.ActionUserID" />
                 <div class="message-item__main">
                   <div class="message-item__head">
                     <span class="message-item__title">{{ item.title || messageTypeLabel(item.type) }}</span>

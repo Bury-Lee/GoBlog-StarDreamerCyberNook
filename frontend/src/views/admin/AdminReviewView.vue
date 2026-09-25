@@ -43,7 +43,7 @@
             <p class="review-card__abstract sd-clamp-2">{{ item.abstract || excerpt(item.content, 160) }}</p>
             <div class="review-card__meta">
               <span class="review-card__author sd-dim">
-                <UserAvatar :src="authors[item.userID]?.avatar" :name="authors[item.userID]?.nickName" :size="22" />
+                <UserAvatar :src="authors[item.userID]?.avatar" :name="authors[item.userID]?.nickName" :size="22" :user-id="item.userID" />
                 {{ authors[item.userID]?.nickName || '未知用户' }}
               </span>
               <span class="sd-dim">创建:{{ formatDate(item.createdAt) }}</span>

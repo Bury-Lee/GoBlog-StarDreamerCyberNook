@@ -84,7 +84,7 @@
           <el-table-column label="作者" width="150">
             <template #default="{ row }">
               <div class="admin-dashboard__author">
-                <UserAvatar :src="authors[row.userID]?.avatar" :name="authors[row.userID]?.nickName" :size="24" />
+                <UserAvatar :src="authors[row.userID]?.avatar" :name="authors[row.userID]?.nickName" :size="24" :user-id="row.userID" />
                 <span class="sd-ellipsis">{{ authors[row.userID]?.nickName || '未知用户' }}</span>
               </div>
             </template>

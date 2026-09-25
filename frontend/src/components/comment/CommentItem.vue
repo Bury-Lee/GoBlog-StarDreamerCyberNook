@@ -26,7 +26,7 @@
           <el-icon><Pointer /></el-icon>
           {{ comment.diggCount > 0 ? `点赞 ${comment.diggCount}` : '点赞' }}
         </span>
-        <span class="comment-item__action" @click="emit('reply', comment)">
+        <span v-if="currentUserId > 0" class="comment-item__action" @click="emit('reply', comment)">
           <el-icon><ChatLineRound /></el-icon>
           回复
         </span>

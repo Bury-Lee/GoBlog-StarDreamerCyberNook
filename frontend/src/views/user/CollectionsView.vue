@@ -147,7 +147,7 @@ const folderForm = reactive({
 })
 
 const ownerID = computed(() => Number(route.query.user || userStore.userId || 0))
-const isSelf = computed(() => ownerID.value === userStore.userId)
+const isSelf = computed(() => userStore.isLogin && ownerID.value === userStore.userId)
 const activeFolder = computed(() => folders.value.find((item) => item.id === activeFolderID.value) || null)
 
 async function loadFolders(): Promise<void> {

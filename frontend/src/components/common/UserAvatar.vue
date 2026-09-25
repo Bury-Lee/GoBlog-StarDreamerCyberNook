@@ -1,5 +1,20 @@
 <template>
+  <router-link
+    v-if="userId > 0"
+    class="user-avatar-link"
+    :to="{ name: 'user-home', params: { id: userId } }"
+    @click.stop
+  >
+    <span
+      class="user-avatar"
+      :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.max(11, size * 0.4)}px` }"
+    >
+      <img v-if="src && !failed" :src="resolvedSrc" :alt="name" @error="failed = true" />
+      <span v-else class="user-avatar__fallback">{{ initial }}</span>
+    </span>
+  </router-link>
   <span
+    v-else
     class="user-avatar"
     :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.max(11, size * 0.4)}px` }"
   >
@@ -17,11 +32,14 @@ const props = withDefaults(
     src?: string
     name?: string
     size?: number
+    /** 提供用户ID时,头像可点击跳转到该用户主页 */
+    userId?: number
   }>(),
   {
     src: '',
     name: '',
     size: 36,
+    userId: 0,
   },
 )
 
@@ -44,6 +62,11 @@ const initial = computed(() => {
 </script>
 
 <style scoped lang="scss">
+.user-avatar-link {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
 .user-avatar {
   display: inline-flex;
   align-items: center;

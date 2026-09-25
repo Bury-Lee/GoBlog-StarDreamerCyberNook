@@ -59,6 +59,7 @@
                 :src="message.isMe ? message.sendUserAvatar : message.revUserAvatar"
                 :name="message.isMe ? message.sendUserNickname : message.revUserNickname"
                 :size="34"
+                :user-id="message.isMe ? message.sendUserID : message.revUserID"
               />
               <div class="chat-bubble__body">
                 <div class="chat-bubble__meta sd-dim">

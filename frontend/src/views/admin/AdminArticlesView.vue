@@ -74,7 +74,7 @@
         <el-table-column label="作者" width="150">
           <template #default="{ row }">
             <div class="admin-articles__author">
-              <UserAvatar :src="row.avatar" :name="row.userNickName" :size="26" />
+              <UserAvatar :src="row.avatar" :name="row.userNickName" :size="26" :user-id="row.userID" />
               <span class="sd-ellipsis">{{ row.userNickName || '未知用户' }}</span>
             </div>
           </template>

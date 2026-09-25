@@ -28,12 +28,15 @@
               <el-icon><Setting /></el-icon>
               编辑资料
             </el-button>
-            <template v-else>
+            <template v-else-if="userStore.isLogin">
               <el-button type="primary" plain :loading="followLoading" @click="onFollow">
                 {{ followed ? '已关注' : '关注' }}
               </el-button>
               <el-button @click="goChat">发私信</el-button>
             </template>
+            <router-link v-else :to="{ name: 'login' }">
+              <el-button type="primary" plain>登录后可关注 / 私信</el-button>
+            </router-link>
           </div>
         </div>
 
