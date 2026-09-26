@@ -40,8 +40,6 @@ type MomentModel struct {
 	Visibility   MomentVisibility `gorm:"default:0;index:idx_moment_feed,priority:2;index:idx_moment_user_feed,priority:3" json:"visibility"` // 0公开 1仅好友 2私密
 	Content      string           `gorm:"size:16384" json:"content"`                                                                          // 正文
 	Images       []string         `gorm:"type:text;serializer:json" json:"images"`                                                            // 图片URL列表,JSON序列化
-	Mood         string           `gorm:"size:32" json:"mood"`                                                                                // 心情
-	Location     string           `gorm:"size:64" json:"location"`                                                                            // 位置
 	LikeCount    int              `json:"likeCount"`                                                                                          // 点赞数
 	CommentCount int              `json:"commentCount"`                                                                                       // 评论数
 	RepostCount  int              `json:"repostCount"`                                                                                        // 转发数

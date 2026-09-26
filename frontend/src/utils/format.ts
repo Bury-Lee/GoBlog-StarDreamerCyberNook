@@ -92,6 +92,29 @@ export function messageTypeLabel(type?: number | null): string {
   return MESSAGE_TYPES.find((item) => item.value === type)?.label || '未知消息'
 }
 
+export const MOMENT_TYPE_OPTIONS = [
+  { label: '动态', value: 0 },
+  { label: '日记', value: 1 },
+]
+
+export function momentTypeLabel(type?: number | null): string {
+  return MOMENT_TYPE_OPTIONS.find((item) => item.value === type)?.label || '动态'
+}
+
+export const MOMENT_VISIBILITY_OPTIONS = [
+  { label: '公开', value: 0, type: 'success' as const },
+  { label: '仅好友', value: 1, type: 'warning' as const },
+  { label: '私密', value: 2, type: 'info' as const },
+]
+
+export function momentVisibilityLabel(visibility?: number | null): string {
+  return MOMENT_VISIBILITY_OPTIONS.find((item) => item.value === visibility)?.label || '公开'
+}
+
+export function momentVisibilityType(visibility?: number | null): 'success' | 'warning' | 'info' {
+  return MOMENT_VISIBILITY_OPTIONS.find((item) => item.value === visibility)?.type || 'success'
+}
+
 export const LOG_TYPE_OPTIONS = [
   { label: '登录日志', value: 1 },
   { label: '操作日志', value: 2 },

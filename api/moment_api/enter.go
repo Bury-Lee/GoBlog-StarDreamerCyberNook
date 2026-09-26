@@ -24,8 +24,6 @@ type MomentApi struct{}
 type MomentCreateRequest struct {
 	Content    string                  `json:"content"`    // 正文
 	Images     []string                `json:"images"`     // 图片URL列表
-	Mood       string                  `json:"mood"`       // 心情
-	Location   string                  `json:"location"`   // 位置
 	Type       models.MomentType       `json:"type"`       // 0动态 1日记
 	Visibility models.MomentVisibility `json:"visibility"` // 0公开 1仅好友 2私密
 	Status     models.Status           `json:"status"`     // 0草稿 2已发布
@@ -93,8 +91,6 @@ func (MomentApi) MomentCreateView(c *gin.Context) {
 		Visibility: req.Visibility,
 		Content:    content,
 		Images:     req.Images,
-		Mood:       strings.TrimSpace(xss_filter.SanitizeText(req.Mood)),
-		Location:   strings.TrimSpace(xss_filter.SanitizeText(req.Location)),
 		Status:     status,
 	}
 	if err := global.DB.Create(&model).Error; err != nil {
@@ -231,8 +227,6 @@ type MomentUpdateRequest struct {
 	ID         uint                    `json:"id" binding:"required"`
 	Content    string                  `json:"content"`
 	Images     []string                `json:"images"`
-	Mood       string                  `json:"mood"`
-	Location   string                  `json:"location"`
 	Type       models.MomentType       `json:"type"`
 	Visibility models.MomentVisibility `json:"visibility"`
 	Status     models.Status           `json:"status"`
@@ -283,8 +277,6 @@ func (MomentApi) MomentUpdateView(c *gin.Context) {
 	if err := global.DB.Model(&moment).Updates(map[string]any{
 		"content":    content,
 		"images":     imagesJSON(req.Images),
-		"mood":       strings.TrimSpace(xss_filter.SanitizeText(req.Mood)),
-		"location":   strings.TrimSpace(xss_filter.SanitizeText(req.Location)),
 		"type":       req.Type,
 		"visibility": req.Visibility,
 		"status":     status,

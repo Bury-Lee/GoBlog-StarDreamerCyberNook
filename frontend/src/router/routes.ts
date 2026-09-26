@@ -46,6 +46,18 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '编辑文章', requiresAuth: true },
       },
       {
+        path: 'moments/new',
+        name: 'moment-create',
+        component: () => import('@/views/moment/MomentEditorView.vue'),
+        meta: { title: '发布动态', requiresAuth: true },
+      },
+      {
+        path: 'moments/:id/edit',
+        name: 'moment-edit',
+        component: () => import('@/views/moment/MomentEditorView.vue'),
+        meta: { title: '编辑动态', requiresAuth: true },
+      },
+      {
         path: 'me/articles',
         name: 'my-articles',
         component: () => import('@/views/article/MyArticlesView.vue'),
