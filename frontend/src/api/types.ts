@@ -663,3 +663,73 @@ export interface FeedbackHandlePayload {
   status: FeedbackStatus
   reply?: string
 }
+
+// ===== 动态 / 日记 =====
+export type MomentType = 0 | 1 // 0动态 1日记
+export type MomentVisibility = 0 | 1 | 2 // 0公开 1仅好友 2私密
+
+export interface MomentModel extends BaseModel {
+  userID: number
+  user: UserModel
+  type: number
+  visibility: number
+  content: string
+  images: string[] | null
+  likeCount: number
+  commentCount: number
+  repostCount: number
+  repostFromID: number | null
+  /** 转发时后端返回的被转发原动态(作者隐私字段已裁剪) */
+  repostFrom?: MomentModel | null
+  status: number
+  /** 当前用户是否已点赞(前端本地维护) */
+  digged?: boolean
+}
+
+export interface MomentCommentModel extends BaseModel {
+  momentID: number
+  userID: number
+  user: UserModel
+  content: string
+  path: string
+  rootParentID: number | null
+  diggCount: number
+  digged?: boolean
+}
+
+export interface MomentCreatePayload {
+  content?: string
+  images?: string[]
+  type?: number
+  visibility?: number
+  status?: number
+}
+
+export interface MomentUpdatePayload extends MomentCreatePayload {
+  id: number
+}
+
+export interface MomentQuery extends PageParams {
+  userID?: number
+  type?: number
+}
+
+export interface MomentRepostPayload {
+  content?: string
+  visibility?: number
+}
+
+export interface MomentCommentCreatePayload {
+  momentID: number
+  content: string
+  parentID?: number
+}
+
+export interface MomentCommentQuery extends PageParams {
+  momentID: number
+}
+
+export interface MomentCommentChildQuery extends PageParams {
+  root: number
+}
+

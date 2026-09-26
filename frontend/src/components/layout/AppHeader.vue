@@ -72,6 +72,7 @@
             <el-dropdown-menu>
               <el-dropdown-item command="profile" :icon="User">个人主页</el-dropdown-item>
               <el-dropdown-item command="articles" :icon="Document">我的文章</el-dropdown-item>
+              <el-dropdown-item command="moments" :icon="Sunny">我的动态</el-dropdown-item>
               <el-dropdown-item command="collections" :icon="Star">我的收藏</el-dropdown-item>
               <el-dropdown-item command="history" :icon="Clock">浏览记录</el-dropdown-item>
               <el-dropdown-item command="settings" :icon="Setting">个人设置</el-dropdown-item>
@@ -143,6 +144,7 @@ import {
   Search,
   Setting,
   Star,
+  Sunny,
   SwitchButton,
   User,
 } from '@element-plus/icons-vue'
@@ -244,6 +246,9 @@ async function onCommand(command: string): Promise<void> {
       break
     case 'articles':
       router.push({ name: 'my-articles' })
+      break
+    case 'moments':
+      router.push({ name: 'user-home', params: { id }, query: { tab: 'moments' } })
       break
     case 'collections':
       router.push({ name: 'collections' })

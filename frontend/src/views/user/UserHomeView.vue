@@ -77,6 +77,32 @@
             />
           </el-tab-pane>
 
+          <el-tab-pane label="动态" name="moments">
+            <div v-if="isSelf && userStore.isLogin" class="profile-body__moment-tools">
+              <el-button type="primary" @click="goMomentCreate">
+                <el-icon><EditPen /></el-icon>
+                发布动态
+              </el-button>
+            </div>
+            <div v-loading="moments.loading" class="profile-body__moments">
+              <EmptyState v-if="!moments.loading && !moments.list.length" text="还没有发布动态" />
+              <MomentCard
+                v-for="item in moments.list"
+                :key="item.id"
+                :moment="item"
+                @changed="onMomentChanged"
+                @edit="onMomentEdit"
+              />
+            </div>
+            <PaginationBar
+              :page="moments.page"
+              :limit="moments.limit"
+              :count="moments.count"
+              layout="prev, pager, next"
+              @update:page="changeMomentPage"
+            />
+          </el-tab-pane>
+
           <el-tab-pane label="收藏夹" name="collect">
             <div v-loading="collect.loading" class="profile-body__folders">
               <EmptyState
@@ -191,12 +217,14 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Calendar, Clock, Location, Setting, Star, Timer } from '@element-plus/icons-vue'
+import { Calendar, Clock, EditPen, Location, Setting, Star, Timer } from '@element-plus/icons-vue'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import ArticleCard from '@/components/article/ArticleCard.vue'
+import MomentCard from '@/components/moment/MomentCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import { fetchArticleHistory, fetchArticleList, fetchCollectFolders } from '@/api/article'
+import { fetchMoments } from '@/api/moment'
 import { checkFollow, followUser, fetchFollowList, fetchFollowerList, unfollowUser } from '@/api/follow'
 import { fetchUserBaseInfo, fetchUserDetail } from '@/api/user'
 import { resolveAssetUrl } from '@/api/request'
@@ -205,6 +233,7 @@ import type {
   ArticleListResponse,
   CollectModel,
   FollowModel,
+  MomentModel,
   UserBaseInfo,
   UserDetail,
 } from '@/api/types'
@@ -226,6 +255,14 @@ const isSelf = computed(() => userStore.userId === targetID.value)
 
 const articles = reactive({
   list: [] as ArticleListResponse[],
+  count: 0,
+  page: 1,
+  limit: 8,
+  loading: false,
+})
+
+const moments = reactive({
+  list: [] as MomentModel[],
   count: 0,
   page: 1,
   limit: 8,
@@ -307,6 +344,39 @@ async function loadArticles(): Promise<void> {
 function changeArticlePage(next: number): void {
   articles.page = next
   void loadArticles()
+}
+
+async function loadMoments(): Promise<void> {
+  if (!targetID.value) return
+  moments.loading = true
+  try {
+    const data = await fetchMoments({ userID: targetID.value, page: moments.page, limit: moments.limit })
+    moments.list = data?.list ?? []
+    moments.count = data?.count ?? 0
+  } catch {
+    moments.list = []
+    moments.count = 0
+  } finally {
+    moments.loading = false
+  }
+}
+
+function changeMomentPage(next: number): void {
+  moments.page = next
+  void loadMoments()
+}
+
+function onMomentChanged(): void {
+  moments.page = 1
+  void loadMoments()
+}
+
+function onMomentEdit(moment: MomentModel): void {
+  router.push({ name: 'moment-edit', params: { id: moment.id } })
+}
+
+function goMomentCreate(): void {
+  router.push({ name: 'moment-create' })
 }
 
 async function loadCollect(): Promise<void> {
@@ -441,6 +511,7 @@ function changeHistoryPage(next: number): void {
 function onTabChange(name: string | number): void {
   const tab = String(name)
   if (tab === 'articles') void loadArticles()
+  if (tab === 'moments') void loadMoments()
   if (tab === 'collect') void loadCollect()
   if (tab === 'social') void loadSocial()
   if (tab === 'history') void loadHistory()
@@ -504,6 +575,7 @@ async function onFollow(): Promise<void> {
 
 watch(targetID, () => {
   articles.page = 1
+  moments.page = 1
   history.page = 1
   follows.page = 1
   followers.page = 1
@@ -631,6 +703,19 @@ onMounted(() => {
   flex-direction: column;
   gap: 14px;
   min-height: 120px;
+}
+
+.profile-body__moments {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 120px;
+}
+
+.profile-body__moment-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
 .profile-body__folders {

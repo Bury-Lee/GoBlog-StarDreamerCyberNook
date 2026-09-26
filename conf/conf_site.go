@@ -8,6 +8,7 @@ type Site struct {
 	About      About      `yaml:"about" json:"about"`           // 关于
 	IndexRight IndexRight `yaml:"indexRight" json:"indexRight"` // 右侧组件
 	Article    Article    `yaml:"article" json:"article"`       // 文章设置
+	Moment     Moment     `yaml:"moment" json:"moment"`         // 动态设置
 	Login      Login      `yaml:"login" json:"login"`           // 登录
 }
 
@@ -49,6 +50,11 @@ func (this *About) SetVersion() {
 // Article 文章设置
 type Article struct {
 	EnableExamination bool `yaml:"enableExamination" json:"enableExamination"` // 是否启用文章审核
+}
+
+// Moment 动态设置
+type Moment struct {
+	EnableExamination bool `yaml:"enableExamination" json:"enableExamination"` // 是否启用动态审核
 }
 
 // Login 登录

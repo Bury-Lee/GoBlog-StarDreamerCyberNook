@@ -68,6 +68,7 @@ func InitRouter() *gin.Engine {
 	CaptcharRouter(nr) //已测试完毕
 	ArticleRouter(nr)  //已测试完毕
 	CommentRouter(nr)  //已测试完毕
+	MomentRouter(nr)   //动态/日记
 	MessageRouter(nr)
 	ChatRouter(nr)
 	AIRouter(nr) //已测试完毕
