@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -90,7 +91,8 @@ func verifyEmailCode(c *gin.Context, key, code, expectEmail, expectType string) 
 		return EmailVerifyInfo{}, false
 	}
 
-	if subtle.ConstantTimeCompare([]byte(info.EmailCode), []byte(code)) != 1 {
+	// 大小写不敏感比较(统一转大写后再做常量时间比较),兼容历史字母验证码
+	if subtle.ConstantTimeCompare([]byte(strings.ToUpper(info.EmailCode)), []byte(strings.ToUpper(code))) != 1 {
 		//失败计数,超过上限直接作废验证码
 		failKey := key + ":fail"
 		attempts, incrErr := global.RedisTimeCache.Incr(ctx, failKey).Result()

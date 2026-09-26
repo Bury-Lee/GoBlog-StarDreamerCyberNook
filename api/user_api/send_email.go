@@ -86,7 +86,7 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 
 	switch req.Type {
 	case "注册":
-		code := utils.GetRandomString(8, utils.AlphaNum)
+		code := utils.GetRandomString(6, utils.Digits)
 		id := utils.GetRandomString(20, utils.AlphaNum)
 
 		// 发送邮件
@@ -120,7 +120,7 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 		newEmailID = id
 
 	case "重置密码":
-		code := utils.GetRandomString(8, utils.AlphaNum)
+		code := utils.GetRandomString(6, utils.Digits)
 		id := utils.GetRandomString(20, utils.AlphaNum)
 
 		// 发送邮件
@@ -167,11 +167,11 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 		}
 
 		// 为原邮箱生成验证码
-		oldEmailCode := utils.GetRandomString(8, utils.AlphaNum)
+		oldEmailCode := utils.GetRandomString(6, utils.Digits)
 		oldEmailID = utils.GetRandomString(20, utils.AlphaNum)
 
 		// 为新邮箱生成验证码
-		newEmailCode := utils.GetRandomString(8, utils.AlphaNum)
+		newEmailCode := utils.GetRandomString(6, utils.Digits)
 		newEmailID = utils.GetRandomString(20, utils.AlphaNum)
 
 		// 给原邮箱发送验证邮件
