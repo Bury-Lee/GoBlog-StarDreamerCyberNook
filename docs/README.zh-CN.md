@@ -22,6 +22,7 @@
 - **AI 已接入业务**：支持站点 AI 助手，以及文章、评论、昵称等内容审核
 - **多模型 AI 接入**：现已支持多种 AI（支持 OpenAI 接口的模型），加入 AI 文章摘要功能和 AI 文章评级功能，调试模式下输出 AI 回复内容的功能
 - **运营能力齐全**：支持站点配置、SEO、轮播图、友情链接、推广位和日志管理
+- **单进程微服务化（统一宿主）**：一个进程以 `GoTenon` 宿主运行博客网关与 11 个 gRPC 服务（`ai/search/notify/media/auth/content/user/message/community/log/chat`），由 `setting.yaml` 的 `components` 控制启停；默认共享宿主 `global.DB` 单连接池，可用 `dbStandalone` 让服务使用独立库
 - **内置前端**：`frontend/` 内提供 Vue 3 + TypeScript + Vite + Pinia + Element Plus 前端，覆盖用户站与管理后台，赛博暗色主题
 
 > 📖 **功能文档**：[博客功能文档](功能文档.md)

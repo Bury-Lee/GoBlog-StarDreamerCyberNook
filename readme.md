@@ -24,6 +24,7 @@ A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, 
 - **AI Integration**: Site AI assistant and content moderation for articles, comments, and nicknames
 - **Multi-model AI Support**: Now supports multiple AIs (OpenAI interface compatible), added AI article summary and AI article rating features, and supports outputting AI responses in debug mode
 - **Complete Operations Features**: Site configuration, SEO, banners, friend links, promotion slots, and log management
+- **Pluginized Microservice Architecture**: a single process runs a `GoTenon` unified host plus 11 gRPC services (`ai / search / notify / media / auth / content / user / message / community / log / chat`); toggle components via `setting.yaml`, share one `global.DB` by default, or give a service its own DB with `dbStandalone`
 - **Built-in Frontend**: Vue 3 + TypeScript + Vite + Pinia + Element Plus frontend covering both the public site and the admin console, with a cyber dark theme
 
 > 📖 **Feature Documentation**: [Blog Feature Documentation](docs/功能文档.md)

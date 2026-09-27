@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoBlog-StarDreamerCyberNook 架构图(单进程微服务化)</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
+    .container { max-width: 1320px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 1000px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; } .card-dot.emerald { background: #34d399; } .card-dot.violet { background: #a78bfa; } .card-dot.amber { background: #fbbf24; } .card-dot.rose { background: #fb7185; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .card code { color: #e2e8f0; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+    .toolbar { display: flex; gap: 0.5rem; margin-left: auto; flex-shrink: 0; align-items: center; }
+    .toolbar-toggle { background: transparent; border: none; color: #475569; cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 0.25rem 0.5rem; border-radius: 0.375rem; transition: color 0.2s, background 0.2s; }
+    .toolbar-toggle:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.5); }
+    .toolbar-actions { display: none; gap: 0.5rem; }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button { background: rgba(30, 41, 59, 0.8); border: 1px solid #334155; color: #94a3b8; padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-family: inherit; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .toolbar-actions button:hover { background: rgba(51, 65, 85, 0.8); color: white; border-color: #475569; }
+    @media print { body { background: #020617; padding: 1rem; } .toolbar { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>GoBlog-StarDreamerCyberNook 架构(单进程 · 微服务化)</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions">
+            <button onclick="copyAsImage(this)">📋 Copy</button>
+            <button onclick="downloadPNG(this)">🖼️ PNG</button>
+            <button onclick="downloadPDF(this)">📄 PDF</button>
+          </div>
+          <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">一个 main 进程即统一宿主(GoTenon 内核):按 setting.yaml 装配 博客网关 + 11 个 gRPC 微服务组件 · 共享 global.DB 单连接池(dbStandalone 可独立库)</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1240 820">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+          </marker>
+          <marker id="arrowV" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+          </marker>
+          <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- ============ arrows (behind boxes) ============ -->
+        <!-- clients -> gateway -->
+        <path d="M 160 392 C 190 300 200 210 226 176" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="148" y="250" fill="#22d3ee" font-size="9">HTTPS / JWT</text>
+
+        <!-- config -> gateway -->
+        <line x1="325" y1="240" x2="325" y2="200" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowA)"/>
+        <text x="334" y="224" fill="#fbbf24" font-size="8">读取</text>
+
+        <!-- gateway -> gRPC bus trunk -->
+        <line x1="420" y1="148" x2="452" y2="148" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="452" y1="100" x2="452" y2="331" stroke="#34d399" stroke-width="1.5"/>
+        <line x1="452" y1="127" x2="470" y2="127" stroke="#34d399" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+        <line x1="452" y1="195" x2="470" y2="195" stroke="#34d399" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+        <line x1="452" y1="263" x2="470" y2="263" stroke="#34d399" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+        <line x1="452" y1="331" x2="470" y2="331" stroke="#34d399" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+        <line x1="640" y1="127" x2="660" y2="127" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="830" y1="127" x2="850" y2="127" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="640" y1="195" x2="660" y2="195" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="830" y1="195" x2="850" y2="195" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="640" y1="263" x2="660" y2="263" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="830" y1="263" x2="850" y2="263" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <line x1="640" y1="331" x2="660" y2="331" stroke="#34d399" stroke-width="1" marker-end="url(#arrowhead)"/>
+        <text x="424" y="378" fill="#34d399" font-size="8">gRPC · sd:///&lt;service&gt; · round_robin(全部 11 服务)</text>
+
+        <!-- services -> databases / externals (dashed, colored by target) -->
+        <path d="M 560 360 C 560 470 305 540 305 656" fill="none" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowV)"/>
+        <text x="368" y="520" fill="#a78bfa" font-size="8">SQL(共享 global.DB)</text>
+        <path d="M 610 360 C 610 470 470 540 470 656" fill="none" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowV)"/>
+        <text x="520" y="545" fill="#a78bfa" font-size="8">Redis 缓存/计数</text>
+
+        <path d="M 555 154 C 555 380 795 470 795 656" fill="none" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowA)"/>
+        <text x="620" y="430" fill="#fbbf24" font-size="8">OpenAI 兼容</text>
+        <path d="M 745 154 C 745 380 630 470 630 656" fill="none" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowV)"/>
+        <text x="655" y="470" fill="#a78bfa" font-size="8">ES(可选)</text>
+        <path d="M 935 154 C 935 420 1140 500 1140 656" fill="none" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowA)"/>
+        <text x="1010" y="470" fill="#fbbf24" font-size="8">SMTP</text>
+        <path d="M 555 222 C 555 500 970 545 970 656" fill="none" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="5,5" marker-end="url(#arrowA)"/>
+        <text x="700" y="600" fill="#fbbf24" font-size="8">对象存储 / 本地文件</text>
+
+        <!-- ============ boxes ============ -->
+        <!-- clients -->
+        <rect x="30" y="360" width="130" height="64" rx="6" fill="#0f172a"/>
+        <rect x="30" y="360" width="130" height="64" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="95" y="386" fill="white" font-size="11" font-weight="600" text-anchor="middle">Clients</text>
+        <text x="95" y="404" fill="#94a3b8" font-size="9" text-anchor="middle">Browser / Mobile</text>
+
+        <!-- single-process boundary -->
+        <rect x="200" y="60" width="920" height="560" rx="12" fill="rgba(251,191,36,0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="212" y="80" fill="#fbbf24" font-size="10" font-weight="600">main 单进程 · 统一宿主(GoTenon 内核,依赖闭包/拓扑/回滚/优雅停机)</text>
+        <text x="212" y="596" fill="#fbbf24" font-size="8">pkg/: host(GoTenon) · hostapp · hostcfg · dbx · grpcx · discovery · svc · blog　｜　services/*/cmd 亦可独立部署为单独进程</text>
+
+        <!-- gateway -->
+        <rect x="230" y="100" width="190" height="96" rx="6" fill="#0f172a"/>
+        <rect x="230" y="100" width="190" height="96" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="325" y="124" fill="white" font-size="12" font-weight="600" text-anchor="middle">Gateway(blog 组件)</text>
+        <text x="325" y="142" fill="#94a3b8" font-size="9" text-anchor="middle">Gin HTTP :8080</text>
+        <text x="325" y="158" fill="#94a3b8" font-size="9" text-anchor="middle">JWT 中间件 · 路由 · 定时任务</text>
+        <text x="325" y="176" fill="#22d3ee" font-size="8" text-anchor="middle">gRPC 客户端(sd:///) · 缓存编排</text>
+        <text x="325" y="190" fill="#22d3ee" font-size="8" text-anchor="middle">角色 Redis 缓存 · 静态资源托管</text>
+
+        <!-- config -->
+        <rect x="230" y="240" width="190" height="110" rx="6" fill="#0f172a"/>
+        <rect x="230" y="240" width="190" height="110" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="325" y="262" fill="white" font-size="12" font-weight="600" text-anchor="middle">setting.yaml</text>
+        <text x="325" y="280" fill="#94a3b8" font-size="8" text-anchor="middle">host.enable · components 开关 + config</text>
+        <text x="325" y="295" fill="#94a3b8" font-size="8" text-anchor="middle">services 地址 · dbWrite 库</text>
+        <text x="325" y="310" fill="#94a3b8" font-size="8" text-anchor="middle">jwt · ai · email · objectStorage</text>
+        <text x="325" y="330" fill="#fbbf24" font-size="8" text-anchor="middle">dbStandalone 独立库 · 单一配置源</text>
+
+        <!-- services grid -->
+        <!-- row1 -->
+        <rect x="470" y="100" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="470" y="100" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="555" y="122" fill="white" font-size="11" font-weight="600" text-anchor="middle">ai</text>
+        <text x="555" y="140" fill="#94a3b8" font-size="9" text-anchor="middle">:9210 · LLM 对话/审核/摘要</text>
+
+        <rect x="660" y="100" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="660" y="100" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="745" y="122" fill="white" font-size="11" font-weight="600" text-anchor="middle">search</text>
+        <text x="745" y="140" fill="#94a3b8" font-size="9" text-anchor="middle">:9220 · ES + DB 回退</text>
+
+        <rect x="850" y="100" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="850" y="100" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="935" y="122" fill="white" font-size="11" font-weight="600" text-anchor="middle">notify</text>
+        <text x="935" y="140" fill="#94a3b8" font-size="9" text-anchor="middle">:9230 · SMTP 邮件</text>
+
+        <!-- row2 -->
+        <rect x="470" y="168" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="470" y="168" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="555" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">media</text>
+        <text x="555" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">:9240 · 图片元数据/存储</text>
+
+        <rect x="660" y="168" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="660" y="168" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="745" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">auth</text>
+        <text x="745" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">:9250 · JWT 签发/刷新</text>
+
+        <rect x="850" y="168" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="850" y="168" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="935" y="190" fill="white" font-size="11" font-weight="600" text-anchor="middle">content</text>
+        <text x="935" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">:9260 · 文章/评论/动态/收藏</text>
+
+        <!-- row3 -->
+        <rect x="470" y="236" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="470" y="236" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="555" y="258" fill="white" font-size="11" font-weight="600" text-anchor="middle">user</text>
+        <text x="555" y="276" fill="#94a3b8" font-size="9" text-anchor="middle">:9270 · 用户/关注/资料</text>
+
+        <rect x="660" y="236" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="660" y="236" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="745" y="258" fill="white" font-size="11" font-weight="600" text-anchor="middle">message</text>
+        <text x="745" y="276" fill="#94a3b8" font-size="9" text-anchor="middle">:9280 · 站内信/通知</text>
+
+        <rect x="850" y="236" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="850" y="236" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="935" y="258" fill="white" font-size="11" font-weight="600" text-anchor="middle">community</text>
+        <text x="935" y="276" fill="#94a3b8" font-size="9" text-anchor="middle">:9290 · 反馈/轮播/友链</text>
+
+        <!-- row4 -->
+        <rect x="470" y="304" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="470" y="304" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="555" y="326" fill="white" font-size="11" font-weight="600" text-anchor="middle">log</text>
+        <text x="555" y="344" fill="#94a3b8" font-size="9" text-anchor="middle">:9295 · 系统日志</text>
+
+        <rect x="660" y="304" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="660" y="304" width="170" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="745" y="326" fill="white" font-size="11" font-weight="600" text-anchor="middle">chat</text>
+        <text x="745" y="344" fill="#94a3b8" font-size="9" text-anchor="middle">:9296 · 私信/会话</text>
+
+        <!-- row4 col3: data-access note -->
+        <rect x="850" y="304" width="170" height="54" rx="6" fill="#0f172a"/>
+        <rect x="850" y="304" width="170" height="54" rx="6" fill="rgba(76,29,149,0.28)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="935" y="324" fill="white" font-size="10" font-weight="600" text-anchor="middle">数据访问层</text>
+        <text x="935" y="340" fill="#94a3b8" font-size="8" text-anchor="middle">默认共享宿主 global.DB</text>
+        <text x="935" y="351" fill="#a78bfa" font-size="8" text-anchor="middle">dbStandalone→pkg/dbx 独立库</text>
+
+        <!-- ============ externals ============ -->
+        <rect x="210" y="660" width="160" height="64" rx="6" fill="#0f172a"/>
+        <rect x="210" y="660" width="160" height="64" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="290" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">Database</text>
+        <text x="290" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">global.DB 单连接池(宿主)</text>
+
+        <rect x="390" y="660" width="150" height="64" rx="6" fill="#0f172a"/>
+        <rect x="390" y="660" width="150" height="64" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="465" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">Redis</text>
+        <text x="465" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">静态 + 动态(缓存/计数)</text>
+
+        <rect x="560" y="660" width="140" height="64" rx="6" fill="#0f172a"/>
+        <rect x="560" y="660" width="140" height="64" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="630" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">Elasticsearch</text>
+        <text x="630" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">可选(检索降级 DB)</text>
+
+        <rect x="720" y="660" width="150" height="64" rx="6" fill="#0f172a"/>
+        <rect x="720" y="660" width="150" height="64" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="795" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">LM Studio</text>
+        <text x="795" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">本地 LLM(OpenAI 兼容)</text>
+
+        <rect x="890" y="660" width="160" height="64" rx="6" fill="#0f172a"/>
+        <rect x="890" y="660" width="160" height="64" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="970" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">Object Storage</text>
+        <text x="970" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">MinIO / 本地文件</text>
+
+        <rect x="1070" y="660" width="150" height="64" rx="6" fill="#0f172a"/>
+        <rect x="1070" y="660" width="150" height="64" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="1145" y="686" fill="white" font-size="11" font-weight="600" text-anchor="middle">SMTP</text>
+        <text x="1145" y="704" fill="#94a3b8" font-size="9" text-anchor="middle">QQ 邮箱</text>
+
+        <!-- ============ legend (outside boundary) ============ -->
+        <text x="30" y="766" fill="white" font-size="10" font-weight="600">Legend</text>
+        <rect x="110" y="758" width="16" height="10" rx="2" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1"/>
+        <text x="132" y="767" fill="#94a3b8" font-size="8">Gateway</text>
+        <rect x="210" y="758" width="16" height="10" rx="2" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="232" y="767" fill="#94a3b8" font-size="8">Microservice</text>
+        <rect x="330" y="758" width="16" height="10" rx="2" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="352" y="767" fill="#94a3b8" font-size="8">Config / External</text>
+        <rect x="480" y="758" width="16" height="10" rx="2" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="502" y="767" fill="#94a3b8" font-size="8">Database</text>
+        <line x1="590" y1="763" x2="616" y2="763" stroke="#34d399" stroke-width="1.5"/>
+        <text x="622" y="767" fill="#94a3b8" font-size="8">gRPC(sd:///)</text>
+        <line x1="720" y1="763" x2="746" y2="763" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="4,4"/>
+        <text x="752" y="767" fill="#94a3b8" font-size="8">数据访问(共享/独立库)</text>
+        <line x1="880" y1="763" x2="906" y2="763" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="4,4"/>
+        <text x="912" y="767" fill="#94a3b8" font-size="8">外部服务</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot amber"></div><h3>单一配置源</h3></div>
+        <ul>
+          <li>• setting.yaml:host.enable / components / services</li>
+          <li>• components 支持简写 <code>svc: true</code> 与完整 <code>{enabled, config}</code></li>
+          <li>• 各服务地址、数据库、JWT、AI、邮件均从 setting 派生</li>
+          <li>• 环境变量 SVC_&lt;KEY&gt; 可覆盖服务地址</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot violet"></div><h3>数据访问(共享优先)</h3></div>
+        <ul>
+          <li>• 宿主初始化唯一 global.DB(池 10/100/1h、读写分离)</li>
+          <li>• 微服务默认复用该句柄 → 全进程单连接池(SQLite 不再多池争锁)</li>
+          <li>• <code>components.&lt;svc&gt;.config.dbStandalone=true</code> → pkg/dbx 自建独立库</li>
+          <li>• common.ListQuery 显式接收各服务 db,不再硬编码 global.DB</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>进程内微服务</h3></div>
+        <ul>
+          <li>• 一个 main 进程 = 统一宿主(GoTenon 内核)</li>
+          <li>• 11 个 gRPC 服务 9210~9296;services/*/cmd 可独立部署</li>
+          <li>• 博客网关经 gRPC(sd:/// round_robin)调用服务</li>
+          <li>• 失败回滚 / 逆序停机 / panic 兜底(含堆栈)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot cyan"></div><h3>可观测与热配置</h3></div>
+        <ul>
+          <li>• /api/t/config:运行时查看/修改配置(AI/ES 等)</li>
+          <li>• 命令行 -db/-es/-search/-create-user/-v 在 main 启动前执行</li>
+          <li>• 博客 HTTP :8080;静态资源与前端同进程托管</li>
+          <li>• 定时任务(Redis 计数回写、清理)在网关;鉴权角色 Redis 缓存</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">
+      GoBlog-StarDreamerCyberNook · 单进程全栈(博客 + 11 微服务组件)· 内核 GoTenon
+    </p>
+  </div>
+
+  <script>
+    async function copyAsImage(btn) {
+      const orig = btn.textContent;
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = '✓ Copied!';
+      } catch (e) { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+    async function downloadPNG(btn) {
+      const orig = btn.textContent; btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const link = document.createElement('a');
+        link.download = 'architecture.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        btn.textContent = '✓ Done!';
+      } catch (e) { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+    async function downloadPDF(btn) {
+      const orig = btn.textContent; btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('architecture.pdf');
+        btn.textContent = '✓ Done!';
+      } catch (e) { btn.textContent = '✗ Failed'; }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  </script>
+</body>
+</html>

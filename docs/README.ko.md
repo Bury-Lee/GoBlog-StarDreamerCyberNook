@@ -22,6 +22,7 @@
 - **AI 비즈니스 통합**: 사이트 AI 어시스턴트, 게시물, 댓글, 닉네임 등 콘텐츠 검토 지원
 - **다중 모델 AI 지원**: 여러 AI(OpenAI 인터페이스 호환)를 지원하며, AI 게시물 요약 및 AI 게시물 평가 기능 추가. 디버그 모드에서 AI 응답 출력 기능 지원
 - **완전한 운영 기능**: 사이트 설정, SEO, 배너, 친구 링크, 프로모션 슬롯, 로그 관리 지원
+- **단일 프로세스 마이크로서비스화(통합 호스트)**: 하나의 프로세스에서 `GoTenon` 통합 호스트와 11개 gRPC 서비스(`ai/search/notify/media/auth/content/user/message/community/log/chat`)를 실행. `setting.yaml`의 `components`로 활성/비활성 제어, 기본적으로 호스트 `global.DB`(단일 풀)를 공유하며 `dbStandalone`으로 서비스별 개별 DB 사용 가능
 
 > 📖 **기능 문서**: [블로그 기능 문서](功能文档.md)
 
@@ -35,10 +36,14 @@ go-blog
 ├─ router/              # 라우트 등록
 ├─ models/              # 데이터 모델 및 ES 매핑
 ├─ service/             # 비즈니스 서비스 (정기 작업, ES 서비스, Redis 서비스 포함)
+├─ services/            # 마이크로서비스 컴포넌트 (11개 gRPC 서비스) 및 독립 cmd 엔트리
+├─ pkg/                 # 커널/기반: host(GoTenon), hostapp, hostcfg, dbx, grpcx, discovery, svc, blog
 ├─ middleware/          # 미들웨어
 ├─ core/                # 설정/로그/DB/Redis/ES/AI 초기화
 ├─ conf/                # 설정 구조체
 ├─ flags/               # 명령줄 매개변수 (마이그레이션, 인덱스 생성, 사용자 생성)
+├─ gen/                 # protobuf/gRPC 생성 코드
+├─ proto/               # protobuf 정의
 ├─ init/                # 로컬 종속 서비스 docker-compose 및 기본 설정
 ├─ setting.yaml         # 메인 설정 파일
 └─ main.go              # 진입점
