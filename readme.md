@@ -29,6 +29,8 @@ A blog/community backend project based on `Gin + GORM + Redis + Elasticsearch`, 
 
 > 📖 **Feature Documentation**: [Blog Feature Documentation](docs/功能文档.md)
 
+> 🧩 **Architecture Design**: [Architecture Design](docs/架构设计.md) — the single-process unified host, 11 gRPC services, shared `global.DB`, and graceful degradation.
+
 > ⚠️ **Note**: The project supports database read-write separation but **does not provide data synchronization between databases**. The repository does not ship any synchronization dependency or tooling (the former Canal / PGSync solutions have been removed); if you need cross-database or cross-store synchronization, implement it yourself outside this project.
 
 ## 🏗️ Project Structure
