@@ -11,21 +11,32 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// refreshClaimRole 回查数据库中的用户状态,保证封禁与角色变更即时生效
+// loadClaimRole 获取用户最新角色:优先读 Redis 缓存,未命中回查数据库并回填。
+// 返回:false 表示用户不存在或已被封禁。
+func loadClaimRole(userID uint) (enum.RoleType, bool) {
+	if role, ok := redis_jwt.GetRoleCache(userID); ok {
+		return role, role != enum.BlackRole
+	}
+	var user models.UserModel
+	if err := global.DB.Take(&user, userID).Error; err != nil {
+		return 0, false
+	}
+	redis_jwt.SetRoleCache(userID, user.Role)
+	return user.Role, user.Role != enum.BlackRole
+}
+
+// refreshClaimRole 回查用户状态,保证封禁与角色变更即时生效
 // 返回:false表示用户不存在或已被封禁
 func refreshClaimRole(claim *jwts.MyClaims) bool {
 	if claim == nil {
 		return false
 	}
-	var user models.UserModel
-	if err := global.DB.Take(&user, claim.UserID).Error; err != nil {
+	role, ok := loadClaimRole(claim.UserID)
+	if !ok {
 		return false
 	}
-	if user.Role == enum.BlackRole {
-		return false
-	}
-	//以数据库中的角色为准,覆盖token中的旧角色
-	claim.Role = user.Role
+	//以最新角色为准,覆盖token中的旧角色
+	claim.Role = role
 	return true
 }
 

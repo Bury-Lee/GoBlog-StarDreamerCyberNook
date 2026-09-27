@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package media.v1;
+
+option go_package = "StarDreamerCyberNook/gen/media/v1;mediav1";
+
+// MediaService 把二进制存储(本地目录 / S3 兼容对象存储)从博客剥离为独立微服务。
+// 调用方只按 key 存取,不接触本地磁盘或 MinIO SDK。
+service MediaService {
+  rpc Put(PutRequest) returns (PutReply);
+  rpc Get(GetRequest) returns (stream GetChunk);
+  rpc Delete(DeleteRequest) returns (DeleteReply);
+
+  rpc ListImages(ListImagesRequest) returns (ImageListReply);
+  rpc GetImageMeta(GetImageMetaRequest) returns (ImageMeta);
+  rpc FindImageByHash(FindImageByHashRequest) returns (FindImageByHashReply);
+  rpc SaveImage(SaveImageRequest) returns (SaveImageReply);
+  rpc RemoveImages(RemoveImagesRequest) returns (RemoveImagesReply);
+}
+
+message PutRequest {
+  string key         = 1; // 对象键(如 uploads/<hash>.jpg)
+  bytes  data        = 2;
+  string contentType = 3;
+}
+message PutReply {
+  string key = 1;
+}
+
+message GetRequest {
+  string key = 1;
+}
+message GetChunk {
+  bytes data = 1;
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+message DeleteReply {}
+
+// 图片元数据(ImageModel;存储仍为上述 Put/Get/Delete)
+message ImageMeta {
+  uint64 id         = 1;
+  string filename   = 2;
+  string path       = 3;
+  int64  size       = 4;
+  string hash       = 5;
+  int64  created_at = 6;
+  int64  updated_at = 7;
+}
+message ListImagesRequest {
+  int32  page   = 1;
+  int32  limit  = 2;
+  string key    = 3;
+  string order  = 4;
+  uint64 end_id = 5;
+}
+message ImageListReply {
+  repeated ImageMeta list   = 1;
+  int64              count  = 2;
+  bool               capped = 3;
+}
+message GetImageMetaRequest { uint64 id = 1; }
+message FindImageByHashRequest { string hash = 1; }
+message FindImageByHashReply {
+  bool   found = 1;
+  uint64 id    = 2;
+}
+message SaveImageRequest {
+  string filename = 1;
+  string path     = 2;
+  int64  size     = 3;
+  string hash     = 4;
+}
+message SaveImageReply { uint64 id = 1; }
+message RemoveImagesRequest { repeated uint64 ids = 1; }
+message RemoveImagesReply {
+  int32 deleted = 1; // 成功删除(记录+对象)数量
+  int32 failed  = 2; // 对象删除失败数量
+}

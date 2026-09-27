@@ -5,8 +5,8 @@ package feedback_api
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/community_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"strings"
@@ -51,13 +51,7 @@ func (FeedbackApi) FeedbackCreateView(c *gin.Context) {
 		userID = claims.UserID
 	}
 
-	if err := global.DB.Create(&models.FeedbackModel{
-		UserID:      userID,
-		IsAnonymous: req.IsAnonymous,
-		Content:     content,
-		Contact:     strings.TrimSpace(req.Contact),
-		Type:        req.Type,
-	}).Error; err != nil {
+	if err := community_service.CreateFeedback(userID, req.IsAnonymous, content, strings.TrimSpace(req.Contact), req.Type); err != nil {
 		response.FailWithMsg("提交失败", c)
 		return
 	}
@@ -70,7 +64,7 @@ type FeedbackListRequest struct {
 	Type   *models.FeedbackType   `form:"type"`   // 类型筛选,可选
 }
 
-// FeedbackWallView 反馈墙列表(全站公开):直接走通用分页函数,返回前过滤隐私字段
+// FeedbackWallView 反馈墙列表(全站公开):服务端已做隐私过滤(联系方式/处理人/匿名者ID)
 func (FeedbackApi) FeedbackWallView(c *gin.Context) {
 	var req FeedbackListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -78,30 +72,14 @@ func (FeedbackApi) FeedbackWallView(c *gin.Context) {
 		return
 	}
 
-	options := common.Options{
-		PageInfo:      req.PageInfo,
-		DefaultOrder:  "created_at desc",
-		AllowedOrders: []string{"id", "created_at", "status"},
-		CountCap:      common.DefaultCountCap, //总数封顶,避免大表全表扫描
-	}
-	if req.Status != nil {
-		options.Where = global.DB.Where("status = ?", *req.Status)
-	}
-	if req.Type != nil {
-		if options.Where != nil {
-			options.Where = options.Where.Where("type = ?", *req.Type)
-		} else {
-			options.Where = global.DB.Where("type = ?", *req.Type)
-		}
-	}
-
-	list, count, capped, err := common.ListQuery(models.FeedbackModel{}, options)
+	list, count, capped, err := community_service.ListFeedbacks(
+		req.Status, req.Type, req.Page, req.Limit, req.Order, req.EndId)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return
 	}
 
-	//过滤隐私字段:联系方式/处理人不对外返回(空值被 omitempty 省略);匿名反馈不返回提交者ID
+	//防御性再过滤一次(与服务端一致),确保不外泄隐私字段
 	for i := range list {
 		list[i].Contact = ""
 		list[i].HandlerID = 0
@@ -135,26 +113,15 @@ func (FeedbackApi) FeedbackHandleView(c *gin.Context) {
 		return
 	}
 
-	var feedback models.FeedbackModel
-	if err := global.DB.Take(&feedback, uri.ID).Error; err != nil {
-		response.FailWithMsg("反馈不存在", c)
-		return
-	}
-
 	claims := jwts.GetClaims(c)
 	reply := strings.TrimSpace(xss_filter.SanitizeText(req.Reply))
-	if err := global.DB.Model(&feedback).Updates(map[string]any{
-		"status":     req.Status,
-		"reply":      reply,
-		"handler_id": claims.UserID,
-	}).Error; err != nil {
+	feedback, err := community_service.HandleFeedback(uri.ID, req.Status, reply, claims.UserID)
+	if err != nil {
 		response.FailWithMsg("处理失败", c)
 		return
 	}
 
-	//回写内存值,并做与列表一致的隐私过滤后返回,前端据此在列表中增量替换
-	feedback.Status = req.Status
-	feedback.Reply = reply
+	//与列表一致的隐私过滤后返回,前端据此在列表中增量替换
 	feedback.Contact = ""
 	feedback.HandlerID = 0
 	if feedback.IsAnonymous {

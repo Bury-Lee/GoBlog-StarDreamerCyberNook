@@ -5,6 +5,7 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/content_service"
 	"StarDreamerCyberNook/service/review_service"
 
 	"github.com/gin-gonic/gin"
@@ -21,18 +22,9 @@ func (ArticleApi) ArticleReviewListView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	option := common.Options{
-		PageInfo:      req.PageInfo,
-		Likes:         []string{"title"},
-		Preloads:      []string{"UserModel"},
-		Where:         global.DB.Where("status = ?", models.StatusPending), //待审核=用户提交后等待审核的文章
-		AllowedOrders: []string{"id", "created_at", "status"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	}
-	if req.UserID != 0 {
-		option.Where = option.Where.Where("user_id = ?", req.UserID)
-	}
-	list, count, capped, err := common.ListQuery(models.ArticleModel{}, option)
+	// 待审核(status=1)文章列表,DB 下沉 content 服务
+	list, count, capped, err := content_service.ListArticlesByStatus(
+		models.StatusPending, req.UserID, nil, req.Key, req.Page, req.Limit, req.Order, req.EndId)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return
@@ -53,12 +45,12 @@ func (ArticleApi) ArticleReviewView(c *gin.Context) {
 		return
 	}
 
-	var article models.ArticleModel
-	err := global.DB.Take(&article, req.ArticleID).Error
+	detail, err := content_service.GetArticle(req.ArticleID)
 	if err != nil {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
+	article := detail.ArticleModel
 
 	if err = review_service.ApplyArticleReview(&article, req.Status, req.Msg); err != nil {
 		response.FailWithMsg("审核失败:"+err.Error(), c)

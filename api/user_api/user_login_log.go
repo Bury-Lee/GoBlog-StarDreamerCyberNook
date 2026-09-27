@@ -3,9 +3,9 @@ package user_api
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/user_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"time"
 
@@ -45,49 +45,42 @@ func (UserApi) UserLoginListView(c *gin.Context) {
 		req.UserID = claims.UserID
 	}
 
-	var query = global.DB.Where("")
 	if req.StartTime != "" {
-		_, err = time.Parse("2006-01-02 15:04:05", req.StartTime)
-		if err != nil {
+		if _, err = time.Parse("2006-01-02 15:04:05", req.StartTime); err != nil {
 			response.FailWithMsg("开始时间格式错误", c)
 			return
 		}
-		query.Where("created_at >= ?", req.StartTime)
 	}
 	if req.EndTime != "" {
-		_, err = time.Parse("2006-01-02 15:04:05", req.EndTime)
-		if err != nil {
+		if _, err = time.Parse("2006-01-02 15:04:05", req.EndTime); err != nil {
 			response.FailWithMsg("结束时间格式错误", c)
 			return
 		}
-		query.Where("created_at <= ?", req.EndTime)
-	}
-	var preloads []string
-	if isAdmin {
-		preloads = []string{"UserModel"}
 	}
 
-	_list, count, capped, _ := common.ListQuery[models.UserLoginModel](models.UserLoginModel{
-		UserID: req.UserID,
-		IP:     req.Ip,
-		Addr:   req.Addr,
-	}, common.Options{
-		PageInfo:      req.PageInfo,
-		Where:         query,
-		Preloads:      preloads,
-		AllowedOrders: []string{"id", "created_at"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	items, count, capped, err := user_service.ListLoginLogs(
+		req.UserID, req.Ip, req.Addr, req.StartTime, req.EndTime,
+		req.Page, req.Limit, req.Order, req.EndId, isAdmin)
+	if err != nil {
+		response.FailWithMsg("查询失败", c)
+		return
+	}
 
-	var list = make([]UserLoginListResponse, 0)
-	for _, model := range _list {
+	var list = make([]UserLoginListResponse, 0, len(items))
+	for _, it := range items {
+		var m models.UserLoginModel
+		m.ID = it.ID
+		m.CreatedAt = it.CreatedAt
+		m.UserID = it.UserID
+		m.IP = it.IP
+		m.Addr = it.Addr
+		m.UserAgent = it.UserAgent
 		list = append(list, UserLoginListResponse{
-			UserLoginModel: model,
-			UserNickname:   model.UserModel.NickName,
-			UserAvatar:     model.UserModel.Avatar,
+			UserLoginModel: m,
+			UserNickname:   it.Nickname,
+			UserAvatar:     it.Avatar,
 		})
 	}
 
 	response.OkWithListCapped(list, count, capped, c)
-
 }

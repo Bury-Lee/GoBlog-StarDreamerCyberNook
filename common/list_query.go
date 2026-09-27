@@ -2,7 +2,6 @@
 package common
 
 import (
-	"StarDreamerCyberNook/global"
 	"fmt"
 	"strings"
 
@@ -121,6 +120,7 @@ func countWithCap(countQuery *gorm.DB, cap int) (count int, capped bool, err err
 }
 
 // ListQuery 通用分页查询函数
+// 参数:db - 目标数据库句柄(各微服务传各自的 db,避免共用 global.DB)
 // 参数:model - 模型实例,用于指定查询的表
 // 参数:option - 查询的配置选项
 // 返回:list - 查询结果列表
@@ -128,13 +128,13 @@ func countWithCap(countQuery *gorm.DB, cap int) (count int, capped bool, err err
 // 返回:capped - 总数是否被 CountCap 截断(即实际数量大于返回的 count)
 // 返回:err - 错误信息
 // 说明:支持基础查询,模糊匹配,定制化查询,预加载,排序分页,游标分页
-func ListQuery[T any](model T, option Options) (list []T, count int, capped bool, err error) {
+func ListQuery[T any](db *gorm.DB, model T, option Options) (list []T, count int, capped bool, err error) {
 	// 基础查询
-	baseQuery := global.DB.Model(model).Where(model)
+	baseQuery := db.Model(model).Where(model)
 
 	// 模糊匹配
 	if len(option.Likes) > 0 && option.PageInfo.Key != "" {
-		likeCond := global.DB.Session(&gorm.Session{NewDB: true})
+		likeCond := db.Session(&gorm.Session{NewDB: true})
 		for i, column := range option.Likes {
 			if i == 0 {
 				likeCond = likeCond.Where(fmt.Sprintf("%s LIKE ?", column), "%"+option.PageInfo.Key+"%")

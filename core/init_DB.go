@@ -17,6 +17,11 @@ import (
 // 说明: 配置已彻底拆分为写库列表(dbWrite)与读库列表(dbRead);
 // 读库列表为空时,读请求也会落到写库上
 func InitDB() *gorm.DB {
+	// 幂等:共享模式下宿主或 blog 组件可能已初始化,避免重复建池
+	if global.DB != nil {
+		return global.DB
+	}
+
 	writeList := global.Config.DBWrite
 	readList := global.Config.DBRead
 

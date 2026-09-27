@@ -1,152 +1,123 @@
+// Package message_service 是经 gRPC 调用独立 message 服务的客户端(站内信)。
+// Insert* 保持原签名,调用点零改动;新增读接口供 message_api 使用。
 package message_service
 
 import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	messagev1 "StarDreamerCyberNook/gen/message/v1"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
-	"errors"
+	"StarDreamerCyberNook/pkg/grpcx"
+	"StarDreamerCyberNook/pkg/svc"
 )
 
-// InsertCommentMessage 给文章作者发送评论消息(评论创建成功后调用,消息里带上评论ID)
+const messageTimeout = 10 * time.Second
+
+var (
+	cliOnce sync.Once
+	cli     messagev1.MessageServiceClient
+	cliErr  error
+)
+
+func client() (messagev1.MessageServiceClient, error) {
+	cliOnce.Do(func() {
+		var cfgs map[string][]string
+		if global.Config != nil {
+			cfgs = global.Config.Services
+		}
+		svc.Init(cfgs)
+		conn, err := grpcx.Dial("message")
+		if err != nil {
+			cliErr = err
+			return
+		}
+		cli = messagev1.NewMessageServiceClient(conn)
+	})
+	return cli, cliErr
+}
+
+func call(fn func(context.Context, messagev1.MessageServiceClient) error) error {
+	c, err := client()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), messageTimeout)
+	defer cancel()
+	return fn(ctx, c)
+}
+
+// InsertCommentMessage 给文章作者发送评论消息。
 func InsertCommentMessage(model models.CommentModel, RevUserID uint) error {
-	var actionUser models.UserModel
-	if err := global.DB.Select("id", "nick_name", "avatar").Take(&actionUser, model.UserID).Error; err != nil {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertComment(ctx, &messagev1.InsertCommentRequest{
+			RevUserId: uint64(RevUserID), ActionUserId: uint64(model.UserID),
+			ArticleId: uint64(model.ArticleID), CommentId: uint64(model.ID), Content: model.Content,
+		})
 		return err
-	}
-	var article models.ArticleModel
-	if err := global.DB.Select("id", "title").Take(&article, model.ArticleID).Error; err != nil {
-		return err
-	}
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeComment,
-		RevUserID:          RevUserID,
-		ActionUserID:       model.UserID,
-		ActionUserNickname: actionUser.NickName,
-		ActionUserAvatar:   actionUser.Avatar,
-		Title:              models.MessageTypeComment.String(),
-		ArticleID:          model.ArticleID,
-		ArticleTitle:       article.Title,
-		CommentID:          model.ID,
-		Content:            model.Content,
-		IsRead:             false,
-	}).Error
-	if err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
-// InsertReplyMessage 给被回复的评论作者发送回复消息(评论创建成功后调用,消息里带上评论ID)
+// InsertReplyMessage 给被回复的评论作者发送回复消息。
 func InsertReplyMessage(model models.CommentModel, RevUserID uint) error {
-	var actionUser models.UserModel
-	if err := global.DB.Select("id", "nick_name", "avatar").Take(&actionUser, model.UserID).Error; err != nil {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertReply(ctx, &messagev1.InsertCommentRequest{
+			RevUserId: uint64(RevUserID), ActionUserId: uint64(model.UserID),
+			ArticleId: uint64(model.ArticleID), CommentId: uint64(model.ID), Content: model.Content,
+		})
 		return err
-	}
-	var article models.ArticleModel
-	if err := global.DB.Select("id", "title").Take(&article, model.ArticleID).Error; err != nil {
-		return err
-	}
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeReply,
-		RevUserID:          RevUserID,
-		ActionUserID:       model.UserID,
-		ActionUserNickname: actionUser.NickName,
-		ActionUserAvatar:   actionUser.Avatar,
-		Title:              models.MessageTypeReply.String(),
-		ArticleID:          model.ArticleID,
-		ArticleTitle:       article.Title,
-		CommentID:          model.ID,
-		IsRead:             false,
-		Content:            model.Content,
-	}).Error
-	if err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
-func InsertArticleDiggMessage(model models.ArticleDiggModel) error { //给文章的作者发送点赞消息
-	global.DB.Preload("ArticleModel").Take(&model)
-	//要查询点赞的人的用户信息
-	var ActionUser models.UserModel
-	global.DB.Where("id = ?", model.UserID).Take(&ActionUser)
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeDigg,
-		RevUserID:          model.ArticleModel.UserID,
-		ActionUserID:       ActionUser.ID,
-		ActionUserNickname: ActionUser.NickName,
-		ActionUserAvatar:   ActionUser.Avatar,
-		Title:              models.MessageTypeDigg.String(),
-		ArticleID:          model.ArticleID,
-		ArticleTitle:       model.ArticleModel.Title,
-		IsRead:             false,
-	}).Error
-	if err != nil {
+// InsertArticleDiggMessage 给文章作者发送点赞消息。
+func InsertArticleDiggMessage(model models.ArticleDiggModel) error {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertArticleDigg(ctx, &messagev1.InsertDiggRequest{
+			ActionUserId: uint64(model.UserID), ArticleId: uint64(model.ArticleID),
+		})
 		return err
-	}
-	return nil
+	})
 }
 
-// TODO:以后加入给评论的作者发送点赞消息
-func InsertCommentDiggMessage(model models.CommentModel, RevUserID uint) error { //给评论的人发送点赞消息
+// InsertCommentDiggMessage TODO:未实现。
+func InsertCommentDiggMessage(model models.CommentModel, RevUserID uint) error {
 	return errors.New("TODO")
 }
 
-func InsertCollectMessage(model models.UserArticleCollectModel) error { //给文章的人发送收藏消息
-	global.DB.Preload("ArticleModel").Preload("UserModel").Take(&model)
-	//要查询点赞的人的用户信息
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeCollect,
-		RevUserID:          model.ArticleModel.UserID,
-		ActionUserID:       model.UserID,
-		ActionUserNickname: model.UserModel.NickName,
-		ActionUserAvatar:   model.UserModel.Avatar,
-		Title:              models.MessageTypeCollect.String(),
-		ArticleID:          model.ArticleID,
-		ArticleTitle:       model.ArticleModel.Title,
-		IsRead:             false,
-	}).Error
-	if err != nil {
+// InsertCollectMessage 给文章作者发送收藏消息。
+func InsertCollectMessage(model models.UserArticleCollectModel) error {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertCollect(ctx, &messagev1.InsertCollectRequest{
+			ActionUserId: uint64(model.UserID), ArticleId: uint64(model.ArticleID),
+		})
 		return err
-	}
-	return nil
+	})
 }
 
-//TODO:以后加入给关注的人发送关注消息
-
-func InsertSystemMessage(message models.MessageModel) error { //给别人发送系统消息,例如审核通过,账号被冻结等
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeSystem,
-		RevUserID:          message.RevUserID,
-		ActionUserID:       message.ActionUserID,
-		ActionUserNickname: message.ActionUserNickname,
-		ActionUserAvatar:   message.ActionUserAvatar,
-		Title:              message.Title,
-		ArticleID:          message.ArticleID,
-		ArticleTitle:       message.ArticleTitle,
-		CommentID:          message.CommentID,
-		Content:            message.Content,
-		LinkTitle:          message.LinkTitle,
-		LinkHref:           message.LinkHref,
-		IsRead:             false,
-	}).Error
-	if err != nil {
+// InsertSystemMessage 发送系统消息。
+func InsertSystemMessage(message models.MessageModel) error {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertSystem(ctx, &messagev1.SystemMessage{
+			RevUserId: uint64(message.RevUserID), ActionUserId: uint64(message.ActionUserID),
+			ActionUserNickname: message.ActionUserNickname, ActionUserAvatar: message.ActionUserAvatar,
+			Title: message.Title, ArticleId: uint64(message.ArticleID), ArticleTitle: message.ArticleTitle,
+			CommentId: uint64(message.CommentID), Content: message.Content,
+			LinkTitle: message.LinkTitle, LinkHref: message.LinkHref,
+		})
 		return err
-	}
-	return nil
+	})
 }
 
-func InsertAtMessage(model models.UserModel, ReceverUserID uint) error { //给别人发送@消息
-	err := global.DB.Create(&models.MessageModel{
-		Type:               models.MessageTypeAt,
-		RevUserID:          ReceverUserID,
-		ActionUserID:       model.ID,
-		ActionUserNickname: model.NickName,
-		ActionUserAvatar:   model.Avatar,
-		Title:              models.MessageTypeAt.String(),
-		IsRead:             false,
-	}).Error
-	if err != nil {
+// InsertAtMessage 发送@消息。
+func InsertAtMessage(model models.UserModel, ReceverUserID uint) error {
+	return call(func(ctx context.Context, c messagev1.MessageServiceClient) error {
+		_, err := c.InsertAt(ctx, &messagev1.InsertAtRequest{
+			RevUserId: uint64(ReceverUserID), ActionUserId: uint64(model.ID),
+			ActionUserNickname: model.NickName, ActionUserAvatar: model.Avatar,
+		})
 		return err
-	}
-	return nil
+	})
 }

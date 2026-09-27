@@ -288,11 +288,12 @@ go run main.go -f setting.yaml
 | `-es` | ES 인덱스 생성/재구축 |
 | `-search` | 데이터베이스 검색 테이블 재구축 (ES 대체 검색) |
 | `-v` | 버전 보기 |
-| `-t user -s create` | 명령줄로 사용자 생성 |
+| `-create-user` | 대화식으로 사용자 생성 |
 
 **예시:**
 ```bash
-go run main.go -t user -s create
+go run main.go -db
+go run main.go -create-user
 ```
 
 ## ⚙️ 주요 실행 설명
@@ -305,6 +306,8 @@ go run main.go -t user -s create
 
 - **검색 모드**: `es.enabled=true`이면 Elasticsearch, 비활성화면 `article_search_models` 테이블로 폴백(태그 필터/다중 정렬 지원). `-search`로 재구축할 수 있습니다
 - **정리 작업**: `SyncCleanHistory`가 30일 이상 된 열람 기록을 10분마다 삭제합니다
+- **통합 호스트**: `host.enable=true`(기본)이면 하나의 프로세스에서 블로그 게이트웨이와 활성화된 모든 컴포넌트를 실행(GoTenon이 의존/웨이브 순서로 기동/종료). `components`로 활성화 대상 선택(생략=전체)
+- **DB 공유**: 호스트가 유일한 `global.DB`(풀 `10/100/1h` + 읽기/쓰기 분리)를 초기화하고, 마이크로서비스는 기본적으로 이 핸들을 재사용하므로 프로세스당 풀이 **하나**뿐입니다. `components.<name>.config.dbStandalone=true`(+`driver`/`dsn`)로 개별 DB를 사용할 수 있습니다
 
 ## 🔄 데이터베이스 동기화 (종속성 미제공)
 

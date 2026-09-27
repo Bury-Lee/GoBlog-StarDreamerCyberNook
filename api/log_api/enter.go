@@ -3,7 +3,6 @@ package log_api
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
 	"StarDreamerCyberNook/service/log_service"
@@ -41,32 +40,16 @@ func (LogApi) LogListView(c *gin.Context) {
 
 	req.PageInfo.Order = "created_at desc"
 
-	//登录状态是布尔零值,必须用 Where 显式查询,结构体查询会把 false 当"未传参"
-	var query = global.DB.Where("")
-	if req.LoginStatus != nil {
-		query = query.Where("login_status = ?", *req.LoginStatus)
-	}
-
-	list, count, capped, err := common.ListQuery[models.LogModel](models.LogModel{
-		UserID:      req.UserID,
-		LogType:     req.LogType,
-		Level:       req.Level,
-		IP:          req.IP,
-		ServiceName: req.ServiceName,
-	}, common.Options{
-		PageInfo:      req.PageInfo,
-		Likes:         []string{"Title"},
-		Where:         query,
-		Preloads:      []string{"UserModel"},
-		AllowedOrders: []string{"id", "created_at"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	// DB 下沉 log 服务
+	list, count, capped, err := log_service.ListLogs(
+		req.LogType, req.Level, req.IP, req.ServiceName, req.LoginStatus,
+		req.UserID, req.Key, req.Page, req.Limit, req.Order, req.EndId, true)
 	if err != nil {
 		response.FailWithError(err, c)
 		return
 	}
 
-	response.OkWithListCapped(list, int(count), capped, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 func (LogApi) LogReadView(c *gin.Context) {
@@ -75,18 +58,11 @@ func (LogApi) LogReadView(c *gin.Context) {
 		response.FailWithError(err, c)
 		return
 	}
-	var log models.LogModel
-	if err := global.DB.Take(&log, req.ID).Error; err != nil {
+	if err := log_service.ReadLog(req.ID); err != nil {
 		response.FailWithMsg("日志不存在", c)
 		return
 	}
-	if !log.IsRead {
-		global.DB.Model(&log).Update("is_read", true)
-		response.OkWithMsg("日志已读取", c) //TODO:也许要返回日志详情?
-		return
-	}
-
-	response.OkWithMsg("日志已读取", c)
+	response.OkWithMsg("日志已读取", c) //TODO:也许要返回日志详情?
 }
 
 func (LogApi) LogRemoveView(c *gin.Context) {
@@ -99,11 +75,11 @@ func (LogApi) LogRemoveView(c *gin.Context) {
 	log.ShowRequest()
 	log.ShowResponse()
 
-	var logList []models.LogModel
-	global.DB.Find(&logList, "id IN ?", req.IDList)
-	if len(logList) > 0 {
-		global.DB.Delete(&logList)
+	deleted, err := log_service.RemoveLogs(req.IDList)
+	if err != nil {
+		response.FailWithMsg("删除失败", c)
+		return
 	}
 
-	response.OkWithMsg(fmt.Sprintf("日志删除成功,共删除%d条", len(logList)), c)
+	response.OkWithMsg(fmt.Sprintf("日志删除成功,共删除%d条", deleted), c)
 }

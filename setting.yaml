@@ -180,3 +180,47 @@ site:
     emailLogin: true        # 是否启用邮箱登录 (建议保持开启)
     CodeLogin: true         # 是否启用邮箱验证码登录(TODO: 尚未实现) 
     captcha: false          # 是否启用验证码
+# microservice endpoints (service key -> instances); env SVC_<KEY> can override
+services:
+  ai:
+    - 127.0.0.1:9210
+  search:
+    - 127.0.0.1:9220
+  notify:
+    - 127.0.0.1:9230
+  media:
+    - 127.0.0.1:9240
+  auth:
+    - 127.0.0.1:9250
+  content:
+    - 127.0.0.1:9260
+  user:
+    - 127.0.0.1:9270
+  message:
+    - 127.0.0.1:9280
+  community:
+    - 127.0.0.1:9290
+  log:
+    - 127.0.0.1:9295
+  chat:
+    - 127.0.0.1:9296
+
+# 统一宿主:main 默认即宿主(enable 缺省为 true)。
+host:
+  enable: true
+
+# 启用哪些微服务组件(缺省=全部启用;设 false 可关闭,例如 chat: false)
+components:
+  host: true
+  blog: true
+  ai: true
+  search: true
+  notify: true
+  media: true
+  auth: true
+  content: true
+  user: true
+  message: true
+  community: true
+  log: true
+  chat: true

@@ -38,10 +38,14 @@ go-blog
 ├─ router/              # Route registration
 ├─ models/              # Data models and ES Mapping
 ├─ service/             # Business services (including scheduled tasks, ES services, Redis services)
+├─ services/            # Microservice components (11 gRPC services) + standalone cmd entry points
+├─ pkg/                 # Kernel/infra: host (GoTenon), hostapp, hostcfg, dbx, grpcx, discovery, svc, blog
 ├─ middleware/          # Middleware
 ├─ core/                # Configuration/log/DB/Redis/ES/AI initialization
 ├─ conf/                # Configuration structures
 ├─ flags/               # Command line arguments (migration, index creation, user creation)
+├─ gen/                 # Generated protobuf/gRPC code
+├─ proto/               # Protobuf definitions
 ├─ init/                # Local dependency services docker-compose and basic configuration
 ├─ build/               # Cross-platform build scripts (build.sh / build.bat)
 ├─ frontend/            # Built-in Vue 3 + TypeScript frontend (public site + admin console)
@@ -284,6 +288,47 @@ es:
   username: elastic
   password: es
 
+# Unified host: one main process runs the blog gateway + microservice components (default true).
+host:
+  enable: true
+
+# Service discovery: service key -> instance address list (blog dials these via sd://)
+services:
+  ai: ["127.0.0.1:9210"]
+  search: ["127.0.0.1:9220"]
+  notify: ["127.0.0.1:9230"]
+  media: ["127.0.0.1:9240"]
+  auth: ["127.0.0.1:9250"]
+  content: ["127.0.0.1:9260"]
+  user: ["127.0.0.1:9270"]
+  message: ["127.0.0.1:9280"]
+  community: ["127.0.0.1:9290"]
+  log: ["127.0.0.1:9295"]
+  chat: ["127.0.0.1:9296"]
+
+# Which components to enable. Omitted section = all enabled.
+# Both shorthand and full form are supported:
+components:
+  host: true
+  blog: true
+  ai: true
+  search: true
+  notify: true
+  media: true
+  auth: true
+  content: true
+  user: true
+  message: true
+  community: true
+  log: true
+  chat: true
+  # content:                       # full form: enable + per-component config
+  #   enabled: true
+  #   config:
+  #     dbStandalone: true         # use an independent DB instead of the host global.DB
+  #     driver: mysql
+  #     dsn: "user:pass@tcp(127.0.0.1:3306)/blog?charset=utf8mb4&parseTime=True&loc=Local"
+
 dbWrite: # Write databases (at least one)
   - user: root
     password: root
@@ -383,18 +428,21 @@ go run main.go -f setting.yaml
 
 ## 📝 Command Line Parameters
 
+The tasks below are executed once in `main` before the server starts (DB tasks initialize the shared database first).
+
 | Parameter | Description |
 |-----------|-------------|
-| `-f` | Configuration file path (default `setting.yaml`) |
+| `-f <path>` | Configuration file path (default `setting.yaml`) |
 | `-db` | Execute GORM auto migration |
 | `-es` | Create/rebuild ES index |
 | `-search` | Rebuild the database search table (ES fallback search) |
+| `-create-user` | Create a user interactively |
 | `-v` | View version |
-| `-t user -s create` | Create user via command line |
 
 **Example:**
 ```bash
-go run main.go -t user -s create
+go run main.go -db
+go run main.go -create-user
 ```
 
 ## ⚙️ Key Runtime Instructions
@@ -405,6 +453,8 @@ go run main.go -t user -s create
 - **Interface specification**: Current interfaces use `/api` prefix, e.g., `/api/user/login`
 - **Static resources**: Static resource directory mapped as `/web`, corresponding to local `static/`
 - **Scheduled tasks**: `SyncArticle` / `SyncComment` batch-sync Redis count increments to the database every 10 minutes; `SyncCleanHistory` removes browsing history older than 30 days
+- **Unified host**: with `host.enable=true` (default) a single process runs the blog gateway plus all enabled microservice components, started in dependency/wave order by GoTenon; `components` selects what to enable (omitted = all)
+- **Database sharing**: the host initializes one `global.DB` (pool `10/100/1h` + read/write split); microservices reuse that handle by default so the process opens only **one** pool. Set `components.<name>.config.dbStandalone=true` (with `driver`/`dsn`) to let a service create its own pool. `common.ListQuery` now takes each service's `*gorm.DB` explicitly
 
 ## 🔄 Database Synchronization (Not Provided)
 

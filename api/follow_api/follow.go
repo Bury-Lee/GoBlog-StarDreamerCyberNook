@@ -2,11 +2,11 @@ package follow_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/user_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc/status"
 )
 
 type FollowUserRequest struct {
@@ -20,38 +20,25 @@ func (FollowApi) FollowUserView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-
 	claims := jwts.GetClaims(c)
-	if req.FocusUserID == claims.UserID {
-		response.FailWithMsg("其实你时刻都在关注自己~", c)
-		return
-	}
-	// 查关注的用户是否存在
-	var user models.UserModel
-	err := global.DB.Take(&user, req.FocusUserID).Error
-	if err != nil {
-		response.FailWithMsg("关注用户不存在", c)
-		return
-	}
 
-	// 查之前是否已经关注过他了
-	var focus models.UserFollowModel
-	err = global.DB.Take(&focus, "user_id = ? and focus_user_id = ?", claims.UserID, user.ID).Error
-	if err == nil {
+	already, err := user_service.Follow(claims.UserID, req.FocusUserID)
+	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			response.FailWithMsg(st.Message(), c)
+		} else {
+			response.FailWithMsg("关注失败", c)
+		}
+		return
+	}
+	if already {
 		response.OkWithMsg("已关注", c)
 		return
 	}
-
-	// 关注
-	global.DB.Create(&models.UserFollowModel{
-		UserID:      claims.UserID,
-		FocusUserID: req.FocusUserID,
-	})
-
 	response.OkWithMsg("关注成功", c)
 }
 
-// FollowCheckView 查询当前登录用户是否已关注指定用户,用于主页按钮的初始状态
+// FollowCheckView 查询当前登录用户是否已关注指定用户
 func (FollowApi) FollowCheckView(c *gin.Context) {
 	var req struct {
 		UserID uint `form:"userID" binding:"required"`
@@ -65,14 +52,12 @@ func (FollowApi) FollowCheckView(c *gin.Context) {
 		response.FailWithMsg("请登录", c)
 		return
 	}
-	var count int64
-	if err := global.DB.Model(&models.UserFollowModel{}).
-		Where("user_id = ? and focus_user_id = ?", claims.UserID, req.UserID).
-		Count(&count).Error; err != nil {
+	followed, err := user_service.FollowCheck(claims.UserID, req.UserID)
+	if err != nil {
 		response.FailWithMsg("查询关注状态失败", c)
 		return
 	}
-	response.OkWithData(gin.H{"followed": count > 0}, c)
+	response.OkWithData(gin.H{"followed": followed}, c)
 }
 
 // UnFollowUserView 登录人取关用户
@@ -82,29 +67,15 @@ func (FollowApi) UnFollowUserView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-
 	claims := jwts.GetClaims(c)
-	if req.FocusUserID == claims.UserID {
-		response.FailWithMsg("你无法取关自己", c)
-		return
-	}
-	// 查关注的用户是否存在
-	var user models.UserModel
-	err := global.DB.Take(&user, req.FocusUserID).Error
-	if err != nil {
-		response.FailWithMsg("取关用户不存在", c)
-		return
-	}
 
-	// 查之前是否已经关注过他了
-	var focus models.UserFollowModel
-	err = global.DB.Take(&focus, "user_id = ? and focus_user_id = ?", claims.UserID, user.ID).Error
-	if err != nil {
-		response.FailWithMsg("未关注此用户", c)
+	if err := user_service.Unfollow(claims.UserID, req.FocusUserID); err != nil {
+		if st, ok := status.FromError(err); ok {
+			response.FailWithMsg(st.Message(), c)
+		} else {
+			response.FailWithMsg("取关失败", c)
+		}
 		return
 	}
-	// 每天的取关也要有个限度？
-	// 取关
-	global.DB.Delete(&focus)
 	response.OkWithMsg("取消关注成功", c)
 }

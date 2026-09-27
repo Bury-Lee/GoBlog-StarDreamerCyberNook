@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package search.v1;
+
+option go_package = "StarDreamerCyberNook/gen/search/v1;searchv1";
+
+// SearchService 把 Elasticsearch 从博客剥离为独立微服务。
+// 服务端持有 ES 客户端;调用方只传检索参数,不接触 ES。
+service SearchService {
+  // EnsureIndex 确保索引存在;recreate=true 时先删后建。
+  rpc EnsureIndex(EnsureIndexRequest) returns (EnsureIndexReply);
+  // ExistsIndex 判断索引是否存在。
+  rpc ExistsIndex(ExistsIndexRequest) returns (ExistsIndexReply);
+  // DeleteIndex 删除索引。
+  rpc DeleteIndex(DeleteIndexRequest) returns (DeleteIndexReply);
+  // SearchArticles 文章检索(关键词/标签/排序/置顶加权/兴趣标签)。
+  rpc SearchArticles(SearchArticlesRequest) returns (SearchArticlesReply);
+}
+
+message EnsureIndexRequest {
+  string index    = 1;
+  string mapping  = 2;
+  bool   recreate = 3;
+}
+message EnsureIndexReply {}
+
+message ExistsIndexRequest { string index = 1; }
+message ExistsIndexReply   { bool exists = 1; }
+
+message DeleteIndexRequest { string index = 1; }
+message DeleteIndexReply   {}
+
+message SearchArticlesRequest {
+  string          index     = 1; // 索引名
+  string          key       = 2; // 关键词
+  string          tag       = 3; // 标签(精确)
+  int32           type      = 4; // 排序:0 最新 1 相关 2 回复 3 点赞 4 收藏
+  int32           offset    = 5;
+  int32           size      = 6;
+  int32           status    = 7; // 状态过滤(已发布)
+  repeated uint64 top_ids   = 8; // 管理员置顶文章(加权)
+  repeated string like_tags = 9; // 兴趣标签(type=1 时增强)
+}
+
+message SearchHit {
+  uint64 id       = 1;
+  string title    = 2; // 可能已高亮
+  string abstract = 3; // 可能已高亮
+}
+
+message SearchArticlesReply {
+  int64              total = 1;
+  repeated SearchHit hits  = 2;
+}

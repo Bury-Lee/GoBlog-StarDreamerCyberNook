@@ -1,17 +1,18 @@
 package follow_api
 
 import (
+	"time"
+
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/user_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// 保护隐私,不能看别人的好友列表
-type FriendUserListRequest struct { //这样在体验上,如果不传入userID,就默认查我的关注,如果传了userID,就忽略UserID查这个人关注的用户列表
+// FriendUserListRequest 好友列表请求(保护隐私,不能看别人的好友列表)
+type FriendUserListRequest struct {
 	common.PageInfo
 }
 type FriendUserListResponse struct {
@@ -22,10 +23,9 @@ type FriendUserListResponse struct {
 	CreatedAt         time.Time `json:"createdAt"`
 }
 
-// UserListView 我的关注和用户的关注
+// FriendUserListView 我的好友列表
 func (FollowApi) FriendUserListView(c *gin.Context) {
 	var req FriendUserListRequest
-	// 绑定参数
 	if err := c.ShouldBindQuery(&req); err != nil {
 		response.FailWithMsg("参数错误", c)
 		return
@@ -35,26 +35,22 @@ func (FollowApi) FriendUserListView(c *gin.Context) {
 		response.FailWithMsg("请登录", c)
 		return
 	}
-	_list, count, capped, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
-		UserID: claim.UserID,
-		Friend: true,
-	}, common.Options{
-		PageInfo:      req.PageInfo,
-		Preloads:      []string{"FocusUserModel"},
-		AllowedOrders: []string{"id", "created_at"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
 
-	var list = make([]FriendUserListResponse, 0)
-	for _, model := range _list {
-		list = append(list, FriendUserListResponse{
-			FocusUserID:       model.FocusUserID,
-			FocusUserNickName: model.FocusUserModel.NickName,
-			FocusUserAvatar:   model.FocusUserModel.Avatar,
-			FocusUserAbstract: model.FocusUserModel.Abstract,
-			CreatedAt:         model.CreatedAt,
-		})
+	items, count, capped, err := user_service.FriendList(claim.UserID, claim.UserID, true, req.Page, req.Limit, req.Order, req.EndId)
+	if err != nil {
+		response.FailWithMsg("查询失败", c)
+		return
 	}
 
+	list := make([]FriendUserListResponse, 0, len(items))
+	for _, it := range items {
+		list = append(list, FriendUserListResponse{
+			FocusUserID:       it.FocusUserID,
+			FocusUserNickName: it.Nickname,
+			FocusUserAvatar:   it.Avatar,
+			FocusUserAbstract: it.Abstract,
+			CreatedAt:         it.CreatedAt,
+		})
+	}
 	response.OkWithListCapped(list, count, capped, c)
 }

@@ -2,9 +2,9 @@ package comment_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/message_service"
+	"StarDreamerCyberNook/service/user_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
 	"github.com/gin-gonic/gin"
@@ -18,18 +18,22 @@ func (CommentApi) AtOther(c *gin.Context) { //@别人并且发送时前端自动
 		return
 	}
 	claim := jwts.GetClaims(c)
-	var actor models.UserModel
-	err := global.DB.Take(&actor, "id = ?", claim.UserID).Error
+
+	// 发言用户(下沉 user 服务)
+	actorDetail, err := user_service.GetUserDetail(claim.UserID)
 	if err != nil {
 		response.FailWithMsg("用户不存在", c)
 		return
 	}
 	//检查被@的用户是否存在,避免产生指向不存在用户的消息
-	var target models.UserModel
-	if err = global.DB.Take(&target, req.ID).Error; err != nil {
+	if _, err = user_service.GetUserDetail(req.ID); err != nil {
 		response.FailWithMsg("被@的用户不存在", c)
 		return
 	}
+
+	actor := models.UserModel{NickName: actorDetail.NickName, Avatar: actorDetail.Avatar}
+	actor.ID = actorDetail.ID
+
 	if err = message_service.InsertAtMessage(actor, req.ID); err != nil {
 		response.FailWithMsg("发送@消息失败", c)
 		return

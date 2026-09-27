@@ -286,11 +286,12 @@ go run main.go -f setting.yaml
 | `-es` | ESインデックスを作成/再構築 |
 | `-search` | データベース検索テーブルを再構築（ES降級検索） |
 | `-v` | バージョンを表示 |
-| `-t user -s create` | コマンドラインでユーザーを作成 |
+| `-create-user` | 対話式でユーザーを作成 |
 
 **例：**
 ```bash
-go run main.go -t user -s create
+go run main.go -db
+go run main.go -create-user
 ```
 
 ## ⚙️ 重要な実行説明
@@ -303,6 +304,8 @@ go run main.go -t user -s create
 
 - **検索モード**：`es.enabled=true` の場合は Elasticsearch、無効の場合は `article_search_models` テーブルにフォールバック（タグ絞り込み・複数ソート対応）。`-search` で再構築できます
 - **クリーンアップ**：`SyncCleanHistory` が 30 日より古い閲覧履歴を 10 分ごとに削除します
+- **統一ホスト**：`host.enable=true`（既定）では 1 プロセスでブログゲートウェイと有効な全コンポーネントを起動（GoTenon が依存/波次順で起停）。`components` で有効化対象を選択（省略=全有効）
+- **DB 共有**：ホストが唯一の `global.DB`（プール `10/100/1h` + 読み書き分離）を初期化し、マイクロサービスは既定でこのハンドルを再利用するため 1 プロセスにつきプールは **1 つ**。`components.<name>.config.dbStandalone=true`（+`driver`/`dsn`）で個別 DB を作成できます
 
 ## 🔄 データベース同期（依存は提供しません）
 

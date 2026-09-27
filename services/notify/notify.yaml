@@ -1,0 +1,13 @@
+# notify 服务配置(文件为主;环境变量可选覆盖)
+listen: 0.0.0.0:9230
+
+email:
+  domain: ""            # SMTP 服务器域名
+  port: 465             # SMTP 端口
+  sendEmail: ""         # 发件邮箱
+  authCode: ""          # 授权码(建议经环境变量 EMAIL_AUTHCODE 注入)
+  sendNickname: ""      # 发信人昵称
+  SSL: true             # 隐式 SSL
+  TLS: false            # 明文上 STARTTLS
+
+siteTitle: "StarDreamerCyberNook"

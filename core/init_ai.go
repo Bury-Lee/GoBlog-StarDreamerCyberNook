@@ -3,24 +3,17 @@ package core
 import (
 	"StarDreamerCyberNook/global"
 
-	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
 )
 
-func InitAI() *openai.Client {
+// InitAIPrompt 依据配置定制看板娘人格提示词。
+// 说明:模型调用已剥离到 ai 微服务,博客不再持有模型客户端。
+func InitAIPrompt() {
 	if !global.Config.AI.Enable {
 		logrus.Info("AI模型已禁用")
-		return nil
+		return
 	}
 
-	conf := openai.DefaultConfig(global.Config.AI.ApiKey)
-	conf.BaseURL = global.Config.AI.Host
-	conf.APIType = openai.APIType(global.Config.AI.APIType)
-
-	client := openai.NewClientWithConfig(conf)
-	logrus.Info("模型已加载")
-
-	// 设置系统提示词
 	if global.Config.AI.NickName != "" || global.Config.Site.Project.Title != "" {
 		words := "你是" + global.Config.AI.NickName + "，" +
 			global.Config.Site.Project.Title + " 网站的官方看板娘。" +
@@ -35,9 +28,4 @@ func InitAI() *openai.Client {
 	} else {
 		logrus.Infof("未配置ai昵称和网站名称,已启用默认设置")
 	}
-
-	if client == nil {
-		logrus.Warn("ai连接失败!")
-	}
-	return client
 }

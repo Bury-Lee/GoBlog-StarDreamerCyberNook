@@ -108,15 +108,34 @@ func (this *ActionLog) SetImage(src string) { //设置图片项
 	this.itemList = append(this.itemList, fmt.Sprintf("<div class=\"log_Image\"><img src=\"%s\" alt=\"\"/></div>", src))
 }
 
+// maxRequestBodySize 操作日志中最多读取并记录的请求体大小;
+// 超过则不完整读取,避免文件上传/大 body 被整体读进内存(减少不必要的流请求)。
+const maxRequestBodySize = 64 * 1024
+
 func (this *ActionLog) SetRequest(c *gin.Context) { //设置请求项
-	// 1. 读取请求体并打印
-	byteData, err := io.ReadAll(c.Request.Body)
+	if c.Request.Body == nil {
+		return
+	}
+
+	// 文件上传或声明超大 body:不读取,保留原始流给后续 handler
+	ct := c.Request.Header.Get("Content-Type")
+	if c.Request.ContentLength > maxRequestBodySize || strings.HasPrefix(ct, "multipart/form-data") {
+		this.requestBody = []byte("（文件上传或请求体过大,已跳过记录）")
+		return
+	}
+
+	// 有上限地读取:既防止未知长度(分块传输)撑爆内存,也不破坏后续 handler 读取
+	byteData, err := io.ReadAll(io.LimitReader(c.Request.Body, maxRequestBodySize+1))
 	if err != nil {
 		logrus.Errorf("failed to read request body: %s", err.Error())
 	}
-	// fmt.Println("body: ", string(byteData))测试
+	if len(byteData) > maxRequestBodySize {
+		// 超过上限:把已读部分与剩余流拼回去,handler 仍能拿到完整 body
+		c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(byteData), c.Request.Body))
+		this.requestBody = []byte("（请求体过大,已截断记录）")
+		return
+	}
 	// 重新设置请求体（因为 ReadAll 已经读完了）
-	// 注意：这里必须把原来的 body 重新放回去，否则后续 handler 无法读取
 	c.Request.Body = io.NopCloser(bytes.NewReader(byteData))
 	this.requestBody = byteData
 }

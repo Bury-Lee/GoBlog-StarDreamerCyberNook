@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "StarDreamerCyberNook/gen/auth/v1;authv1";
+
+// AuthService 统一签发令牌(密钥集中在服务端,便于轮换)。
+// 注意:令牌的本地校验仍由各服务用共享密钥完成(热路径不远程)。
+service AuthService {
+  rpc Issue(IssueRequest) returns (TokenPair);
+  rpc IssueAccess(IssueRequest) returns (AccessReply);
+  rpc IssueRefresh(RefreshRequest) returns (RefreshReply);
+}
+
+message IssueRequest {
+  uint64 user_id  = 1;
+  string username = 2;
+  int32  role     = 3;
+}
+
+message TokenPair {
+  string access_token  = 1;
+  string refresh_token = 2;
+}
+
+message AccessReply {
+  string access_token = 1;
+}
+
+message RefreshRequest {
+  uint64 user_id = 1;
+}
+
+message RefreshReply {
+  string refresh_token = 1;
+}

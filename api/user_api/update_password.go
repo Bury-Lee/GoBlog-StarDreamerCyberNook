@@ -2,7 +2,7 @@ package user_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
+	"StarDreamerCyberNook/service/user_service"
 	Hash "StarDreamerCyberNook/utils/hash"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
@@ -23,14 +23,18 @@ func (UserApi) UpdatePasswordView(c *gin.Context) {
 	}
 
 	claims := jwts.GetClaims(c)
-	user, err := claims.GetUser()
+	if claims == nil || claims.UserID == 0 {
+		response.FailWithMsg("用户不存在", c)
+		return
+	}
+	detail, err := user_service.GetUserDetail(claims.UserID)
 	if err != nil {
 		response.FailWithMsg("用户不存在", c)
 		return
 	}
 
 	// 邮箱注册的、绑了邮箱的
-	if user.Email == "" {
+	if detail.Email == "" {
 		response.FailWithMsg("仅支持绑定邮箱的用户修改密码", c)
 		return
 	}
@@ -42,6 +46,9 @@ func (UserApi) UpdatePasswordView(c *gin.Context) {
 	// }
 
 	hashPwd, _ := Hash.HashPassword(req.NewPwd)
-	global.DB.Model(&user).Update("password", hashPwd)
+	if err := user_service.UpdatePassword(claims.UserID, hashPwd); err != nil {
+		response.FailWithMsg("密码重置失败", c)
+		return
+	}
 	response.OkWithMsg("密码重置成功", c)
 }

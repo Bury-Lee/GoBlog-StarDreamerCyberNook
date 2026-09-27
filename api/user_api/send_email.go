@@ -4,8 +4,8 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/middleware"
-	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/email_service"
+	"StarDreamerCyberNook/service/user_service"
 	"StarDreamerCyberNook/utils"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"context"
@@ -50,26 +50,30 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 		}
 	}
 
-	// 前置校验：检查邮箱是否已注册/存在
+	// 前置校验：检查邮箱是否已注册/存在(下沉 user 服务)
 	switch req.Type {
-	case "注册":
-		var exists models.UserModel
-		err := global.DB.Where("email = ?", req.Email).Take(&exists).Error
-		if err == nil {
-			response.FailWithMsg("该邮箱已注册", c)
+	case "注册", "重置邮箱":
+		exists, err := user_service.EmailExists(req.Email)
+		if err != nil {
+			response.FailWithMsg("服务器错误", c)
+			return
+		}
+		if exists {
+			if req.Type == "注册" {
+				response.FailWithMsg("该邮箱已注册", c)
+			} else {
+				response.FailWithMsg("该邮箱已使用", c)
+			}
 			return
 		}
 	case "重置密码":
-		var user models.UserModel
-		if err := global.DB.Take(&user, "email = ?", req.Email).Error; err != nil {
-			response.FailWithMsg("该邮箱未注册", c)
+		exists, err := user_service.EmailExists(req.Email)
+		if err != nil {
+			response.FailWithMsg("服务器错误", c)
 			return
 		}
-	case "重置邮箱":
-		var exists models.UserModel
-		err := global.DB.Where("email = ?", req.Email).Take(&exists).Error
-		if err == nil {
-			response.FailWithMsg("该邮箱已使用", c)
+		if !exists {
+			response.FailWithMsg("该邮箱未注册", c)
 			return
 		}
 	default:
@@ -160,7 +164,7 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 			response.FailWithMsg("请先登录", c)
 			return
 		}
-		user, err := claim.GetUser()
+		detail, err := user_service.GetUserDetail(claim.UserID)
 		if err != nil {
 			response.FailWithMsg("获取用户信息失败出错", c)
 			return
@@ -175,7 +179,7 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 		newEmailID = utils.GetRandomString(20, utils.AlphaNum)
 
 		// 给原邮箱发送验证邮件
-		sendErr = email_service.SendResetEmail(user.Email, oldEmailCode)
+		sendErr = email_service.SendResetEmail(detail.Email, oldEmailCode)
 		if sendErr != nil {
 			logrus.Errorf("原邮箱邮件发送失败: %v", sendErr)
 			response.FailWithMsg("邮件发送失败", c)
@@ -192,7 +196,7 @@ func (this UserApi) SendEmailView(c *gin.Context) {
 
 		// 缓存原邮箱的验证码信息
 		oldEmailJsonData, err := json.Marshal(middleware.EmailVerifyInfo{
-			RequstEmail: user.Email,
+			RequstEmail: detail.Email,
 			EmailID:     oldEmailID,
 			EmailCode:   oldEmailCode,
 			Type:        req.Type,

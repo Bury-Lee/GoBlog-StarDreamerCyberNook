@@ -1,0 +1,7 @@
+# search 服务配置(文件为主;环境变量 ES_* 可选覆盖)
+listen: 0.0.0.0:9220
+
+es:
+  url: "http://127.0.0.1:9200"
+  username: ""
+  password: ""          # 建议经环境变量 ES_PASSWORD 注入

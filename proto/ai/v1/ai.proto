@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package ai.v1;
+
+option go_package = "StarDreamerCyberNook/gen/ai/v1;aiv1";
+
+// AIService 把模型调用从博客剥离为独立微服务。
+// 服务端持有 OpenAI 兼容客户端与模型参数。
+service AIService {
+  // Ping 探活:最小化一次对话请求。
+  rpc Ping(PingRequest) returns (PingReply);
+  // Chat 非流式对话。
+  rpc Chat(ChatRequest) returns (ChatReply);
+  // ChatStream 流式对话,逐段返回增量。
+  rpc ChatStream(ChatRequest) returns (stream ChatChunk);
+}
+
+message PingRequest {}
+
+message PingReply {
+  bool   ok      = 1;
+  string message = 2;
+}
+
+// Message 是一条对话消息(role: system / user / assistant)。
+message Message {
+  string role    = 1;
+  string content = 2;
+}
+
+message ChatRequest {
+  // 完整消息列表(优先);为空时用下方便捷字段构建。
+  repeated Message messages = 1;
+  string           content  = 2; // 便捷:单轮 user 内容
+  string           prompt   = 3; // 便捷:system 提示词
+}
+
+message ChatReply {
+  string reply = 1;
+}
+
+message ChatChunk {
+  string delta = 1;
+}

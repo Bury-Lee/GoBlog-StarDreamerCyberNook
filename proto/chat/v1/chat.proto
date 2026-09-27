@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package chat.v1;
+
+option go_package = "StarDreamerCyberNook/gen/chat/v1;chatv1";
+
+// ChatService 拥有私信域:发消息、聊天记录、会话列表。
+service ChatService {
+  rpc SendMessage(SendMessageRequest) returns (Empty);
+  rpc ListMessages(ListMessagesRequest) returns (MessageListReply);
+  rpc ListSessions(ListSessionsRequest) returns (SessionListReply);
+}
+
+message Empty {}
+
+message SendMessageRequest {
+  uint64 send_user_id = 1;
+  uint64 rev_user_id  = 2;
+  string msg_json     = 3; // models.ChatMsg 的 JSON
+  int32  msg_type     = 4;
+}
+
+message ChatMessage {
+  uint64 id            = 1;
+  uint64 send_user_id  = 2;
+  uint64 rev_user_id   = 3;
+  int32  msg_type      = 4;
+  string msg_json      = 5;
+  int64  created_at    = 6;
+  int64  updated_at    = 7;
+  string send_nickname = 8;
+  string send_avatar   = 9;
+  string rev_nickname  = 10;
+  string rev_avatar    = 11;
+}
+message ListMessagesRequest {
+  uint64 user_id = 1; // 当前用户
+  uint64 peer_id = 2; // 对方
+  int32  page    = 3;
+  int32  limit   = 4;
+  string order   = 5;
+  uint64 end_id  = 6;
+}
+message MessageListReply {
+  repeated ChatMessage list   = 1;
+  int64                count  = 2;
+  bool                 capped = 3;
+}
+
+message SessionItem {
+  uint64 id                = 1;
+  string unique_id         = 2;
+  uint64 user_id           = 3;
+  uint64 last_message_id   = 4;
+  string last_msg_json     = 5;
+  int32  last_msg_type     = 6;
+  int64  last_message_time = 7;
+  int32  unread_count      = 8;
+  bool   is_read           = 9;
+  string peer_nickname     = 10;
+  string peer_avatar       = 11;
+}
+message ListSessionsRequest {
+  uint64 user_id = 1;
+  int32  page    = 2;
+  int32  limit   = 3;
+  string order   = 4;
+  uint64 end_id  = 5;
+}
+message SessionListReply {
+  repeated SessionItem list   = 1;
+  int64                count  = 2;
+  bool                 capped = 3;
+}

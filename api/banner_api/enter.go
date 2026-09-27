@@ -6,6 +6,7 @@ import (
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/community_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"context"
 	"encoding/json"
@@ -34,12 +35,7 @@ func (BannerApi) BannerCreateView(c *gin.Context) { //TODO:如果图片不存在
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	err := global.DB.Create(&models.BannerModel{
-		Cover:  req.Cover,
-		Href:   req.Href,
-		IsShow: req.IsShow,
-	}).Error
-	if err != nil {
+	if err := community_service.CreateBanner(req.Cover, req.Href, req.IsShow); err != nil {
 		response.FailWithMsg("添加失败", c)
 		return
 	}
@@ -55,11 +51,7 @@ func (BannerApi) BannerListView(c *gin.Context) {
 		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
 			var req common.PageInfo
 			c.ShouldBind(&req)
-			list, count, capped, _ := common.ListQuery(models.BannerModel{}, common.Options{
-				PageInfo:      req,
-				AllowedOrders: []string{"id", "created_at"},
-				CountCap:      common.DefaultCountCap, //总数封顶
-			})
+			list, count, capped, _ := community_service.ListBanners(true, req.Page, req.Limit, req.Order, req.EndId)
 			response.OkWithListCapped(list, count, capped, c)
 			return
 		}
@@ -84,13 +76,7 @@ func (BannerApi) BannerListView(c *gin.Context) {
 	var req common.PageInfo
 	c.ShouldBind(&req)
 
-	list, count, capped, _ := common.ListQuery(models.BannerModel{
-		IsShow: true,
-	}, common.Options{
-		PageInfo:      req,
-		AllowedOrders: []string{"id", "created_at"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	list, count, capped, _ := community_service.ListBanners(false, req.Page, req.Limit, req.Order, req.EndId)
 	jsonData, err := json.Marshal(list)
 	if err != nil {
 		logrus.Error("缓存数据序列化错误:", err)
@@ -105,15 +91,14 @@ func (BannerApi) BannerRemoveView(c *gin.Context) {
 	if err := c.ShouldBind(&req); err != nil {
 		response.FailWithMsg("参数错误", c)
 	}
-	var list = []models.BannerModel{}
-	global.DB.Find(&list, "id in ?", req.IDList)
-	if len(list) > 0 {
-		global.DB.Delete(&list)
+	if err := community_service.RemoveBanners(req.IDList); err != nil {
+		response.FailWithMsg("删除失败", c)
+		return
 	}
 	//更新缓存
 	ctx := context.Background()
 	global.RedisHotPool.Del(ctx, "banner_list")
-	response.OkWithMsg(fmt.Sprintf("成功删除%d个", len(list)), c)
+	response.OkWithMsg(fmt.Sprintf("成功删除%d个", len(req.IDList)), c)
 }
 
 func (BannerApi) BannerUpdateView(c *gin.Context) {
@@ -122,21 +107,12 @@ func (BannerApi) BannerUpdateView(c *gin.Context) {
 		response.FailWithMsg("绑定参数失败", c)
 		return
 	}
-	var model models.BannerModel
-	err := global.DB.Take(&model, req.ID).Error
-	if err != nil {
-		response.FailWithMsg("未找到记录", c)
-	}
 	var data BannerCreateRequest
 	if err := c.ShouldBindJSON(&data); err != nil {
 		response.FailWithMsg("绑定参数失败", c)
 		return
 	}
-	if err := global.DB.Model(&model).Updates(map[string]any{
-		"cover":  data.Cover,
-		"href":   data.Href,
-		"isShow": data.IsShow,
-	}).Error; err != nil {
+	if err := community_service.UpdateBanner(req.ID, data.Cover, data.Href, data.IsShow); err != nil {
 		response.FailWithMsg("更新失败", c)
 	} else {
 		response.OkWithMsg("更新成功", c)

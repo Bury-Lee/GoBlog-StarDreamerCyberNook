@@ -3,12 +3,10 @@ package article_api
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/content_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
-	"StarDreamerCyberNook/utils/sql"
-	"fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -96,51 +94,50 @@ func (ArticleApi) ArticleListView(c *gin.Context) {
 	}
 	var userTopMap = make(map[uint]bool)
 	var adminTopMap = make(map[uint]bool)
-	if req.UserID != 0 { // 查询用户置顶文章
-		var userTopArticleList []models.UserTopArticleModel
-		global.DB.Preload("UserModel").Order("created_at desc").Find(&userTopArticleList, "user_id = ?", req.UserID)
-		for _, item := range userTopArticleList {
-			TopArticleIDList = append(TopArticleIDList, item.ArticleID)
-			if item.UserModel.Role == enum.AdminRole {
-				adminTopMap[item.ArticleID] = true
+	if req.UserID != 0 { // 查询用户置顶文章(下沉 content 服务)
+		tops, terr := content_service.UserTopArticles(req.UserID)
+		if terr != nil {
+			response.FailWithMsg("查询失败", c)
+			return
+		}
+		for _, t := range tops {
+			TopArticleIDList = append(TopArticleIDList, t.ArticleID)
+			if t.IsAdmin {
+				adminTopMap[t.ArticleID] = true
 			}
-			userTopMap[item.ArticleID] = true
+			userTopMap[t.ArticleID] = true
 		}
 	}
 
-	var options = common.Options{
-		Likes:         []string{"title"},
-		PageInfo:      req.PageInfo,
-		Preloads:      []string{"UserModel", "CategoryModel"}, //预加载用户和分类
-		DefaultOrder:  "created_at desc",
-		AllowedOrders: []string{"created_at", "look_count", "digg_count", "comment_count", "collect_count"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	}
-	if len(TopArticleIDList) > 0 {
-		options.DefaultOrder = fmt.Sprintf("%s, created_at desc", sql.ConvertSliceOrderSql(TopArticleIDList))
-	}
-	//状态必须用 Where 显式查询:结构体查询会忽略零值,草稿(status=0)会被当作"不筛选"
-	if req.Status != nil {
-		options.Where = global.DB.Where("status = ?", *req.Status)
-	}
-
-	_list, count, capped, _ := common.ListQuery(models.ArticleModel{
+	// 经 content 服务查询(内容域已拆分;排序/筛选/分页在服务端)
+	items, count, capped, qerr := content_service.ListArticles(content_service.ListReq{
 		UserID:     req.UserID,
 		CategoryID: req.CategoryID,
-	}, options)
+		Status:     req.Status,
+		Order:      req.Order,
+		Key:        req.Key,
+		Page:       req.Page,
+		Limit:      req.Limit,
+		EndID:      req.EndId,
+		TopIDs:     TopArticleIDList,
+	})
+	if qerr != nil {
+		response.FailWithMsg("查询失败", c)
+		return
+	}
 
-	var list = make([]ArticleListResponse, 0)
-
-	for _, model := range _list {
+	var list = make([]ArticleListResponse, 0, len(items))
+	for _, it := range items {
 		data := ArticleListResponse{
-			ArticleModel: model,
-			UserTop:      userTopMap[model.ID],
-			AdminTop:     adminTopMap[model.ID],
-			UserNickName: model.UserModel.NickName,
-			Avatar:       model.UserModel.Avatar,
+			ArticleModel: it.ArticleModel,
+			UserTop:      userTopMap[it.ArticleModel.ID],
+			AdminTop:     adminTopMap[it.ArticleModel.ID],
+			UserNickName: it.UserNickName,
+			Avatar:       it.Avatar,
 		}
-		if model.CategoryID != nil && model.CategoryModel != nil {
-			data.CategoryTitle = &model.CategoryModel.Title
+		if it.CategoryTitle != "" {
+			t := it.CategoryTitle
+			data.CategoryTitle = &t
 		}
 		list = append(list, data)
 	}

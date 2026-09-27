@@ -1,19 +1,20 @@
 package follow_api
 
 import (
-	"StarDreamerCyberNook/common"
-	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
-	jwts "StarDreamerCyberNook/utils/jwts"
 	"time"
 
+	"StarDreamerCyberNook/common"
+	"StarDreamerCyberNook/common/response"
+	"StarDreamerCyberNook/service/user_service"
+	jwts "StarDreamerCyberNook/utils/jwts"
+
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc/status"
 )
 
-type FollowUserListRequest struct { //这样在体验上,如果不传入userID,就默认查我的关注,如果传了userID,就忽略UserID查这个人关注的用户列表
+type FollowUserListRequest struct {
 	common.PageInfo
-	UserID uint `form:"userID"` // 查用户的关注
+	UserID uint `form:"userID"`
 }
 type FollowUserListResponse struct {
 	FocusUserID       uint      `json:"focusUserID"`
@@ -26,12 +27,10 @@ type FollowUserListResponse struct {
 // FollowUserListView 我的关注和用户的关注
 func (FollowApi) FollowUserListView(c *gin.Context) {
 	var req FollowUserListRequest
-	// 绑定参数
 	if err := c.ShouldBindQuery(&req); err != nil {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	//该路由是公开路由,中间件不会注入claims,需要自己从token头解析
 	claims := jwts.GetClaims(c)
 	if claims == nil {
 		claims, _ = jwts.ParseTokenByGin(c)
@@ -43,37 +42,30 @@ func (FollowApi) FollowUserListView(c *gin.Context) {
 		}
 		req.UserID = claims.UserID
 	}
-	var userConf models.UserConfModel
-	err := global.DB.Take(&userConf, "user_id = ?", req.UserID).Error
+	var viewerID uint
+	if claims != nil {
+		viewerID = claims.UserID
+	}
+
+	items, count, capped, err := user_service.FollowingList(req.UserID, viewerID, claims != nil, req.Page, req.Limit, req.Order, req.EndId)
 	if err != nil {
-		response.FailWithMsg("用户配置信息不存在", c)
+		if st, ok := status.FromError(err); ok {
+			response.FailWithMsg(st.Message(), c)
+		} else {
+			response.FailWithMsg("查询失败", c)
+		}
 		return
 	}
-	//匿名访问他人关注列表时claims为nil,必须先判空避免空指针
-	if !userConf.OpenFollow {
-		if claims == nil || claims.UserID != req.UserID {
-			response.FailWithMsg("此用户未公开我的关注", c)
-			return
-		}
-	}
 
-	_list, count, capped, _ := common.ListQuery[models.UserFollowModel](models.UserFollowModel{
-		UserID: req.UserID, //是这样吗?
-	}, common.Options{
-		PageInfo: req.PageInfo,
-		Preloads: []string{"FocusUserModel"},
-	})
-
-	var list = make([]FollowUserListResponse, 0)
-	for _, model := range _list {
+	list := make([]FollowUserListResponse, 0, len(items))
+	for _, it := range items {
 		list = append(list, FollowUserListResponse{
-			FocusUserID:       model.FocusUserID,
-			FocusUserNickName: model.FocusUserModel.NickName,
-			FocusUserAvatar:   model.FocusUserModel.Avatar,
-			FocusUserAbstract: model.FocusUserModel.Abstract,
-			CreatedAt:         model.CreatedAt,
+			FocusUserID:       it.FocusUserID,
+			FocusUserNickName: it.Nickname,
+			FocusUserAvatar:   it.Avatar,
+			FocusUserAbstract: it.Abstract,
+			CreatedAt:         it.CreatedAt,
 		})
 	}
-
 	response.OkWithListCapped(list, count, capped, c)
 }

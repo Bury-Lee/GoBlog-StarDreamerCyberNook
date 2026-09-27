@@ -1,13 +1,17 @@
 package image_api
 
 import (
+	"context"
+	"fmt"
+	"mime"
+	"net/http"
+	"path"
+
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/log_service"
-	"fmt"
-	"os"
+	"StarDreamerCyberNook/service/media_service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -19,15 +23,12 @@ import (
 type ImageApi struct{}
 
 // ImageListResponse 图片列表响应结构体
-// 说明: 包含图片模型和Web访问路径
 type ImageListResponse struct {
 	models.ImageModel
 	WebPath string `json:"webPath"` // Web访问路径
 }
 
 // ImageList 获取图片列表
-// 参数: c - gin上下文
-// 说明: 分页查询图片列表,支持文件名模糊搜索
 func (ImageApi) ImageList(c *gin.Context) {
 	var req common.PageInfo
 	if err := c.ShouldBind(&req); err != nil {
@@ -35,37 +36,28 @@ func (ImageApi) ImageList(c *gin.Context) {
 		return
 	}
 
-	// 查询图片列表
-	_list, cout, capped, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
-		PageInfo:      req,
-		Likes:         []string{"filename"}, // 支持文件名模糊搜索
-		AllowedOrders: []string{"id", "created_at", "size"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	_list, count, capped, err := media_service.ListImages(req.Page, req.Limit, req.Key, req.Order, req.EndId)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return
 	}
 
-	// 构建响应数据
 	var list = make([]ImageListResponse, 0)
 	for _, model := range _list {
 		list = append(list, ImageListResponse{
 			ImageModel: model,
-			WebPath:    model.WebPath(), // 获取Web访问路径
+			WebPath:    model.WebPath(),
 		})
 	}
-	response.OkWithListCapped(list, cout, capped, c)
+	response.OkWithListCapped(list, count, capped, c)
 }
 
 // RemoveRequest 图片删除请求结构体
 type RemoveRequest struct {
-	IDlist []uint `json:"IDlist" binding:"required"` // 要删除的图片ID列表
+	IDlist []uint `json:"IDlist" binding:"required"`
 }
 
 // ImageRemoveView 批量删除图片
-// 参数: c - gin上下文
-// 说明: 根据ID列表批量删除图片,记录操作日志
 func (ImageApi) ImageRemoveView(c *gin.Context) {
 	var req RemoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -73,47 +65,48 @@ func (ImageApi) ImageRemoveView(c *gin.Context) {
 		return
 	}
 
-	// 记录操作日志
 	log := log_service.GetLog(c)
 	log.ShowRequest()
 	log.ShowResponse()
 
-	// 查询要删除的图片
-	var list []models.ImageModel
-	global.DB.Find(&list, "id IN ?", req.IDlist)
-
-	// 批量删除图片
-	//TODO:迟点再检查一下这里
-	if len(list) > 0 {
-		err := global.DB.Delete(&list).Error
-		if err != nil {
-			logrus.Error(fmt.Sprintf("删除失败:%s", err))
-		} else {
-			for _, img := range list { //同步删除本地物理文件
-				if err := os.Remove(img.Path); err != nil {
-					logrus.Error(fmt.Sprintf("删除本地文件失败:%s", err))
-					continue
-				}
-			}
-		}
+	// 记录与存储对象均由 media 服务删除
+	deleted, failed, err := media_service.RemoveImages(req.IDlist)
+	if err != nil {
+		response.FailWithMsg("删除失败", c)
+		return
 	}
-	response.OkWithMsg(fmt.Sprintf("图片删除成功,共删除%d张", len(list)), c)
+	if failed > 0 {
+		logrus.Errorf("有%d张图片对象删除失败", failed)
+		response.FailWithMsg(fmt.Sprintf("有%d张图片删除失败,请重试", failed), c)
+		return
+	}
+	response.OkWithMsg(fmt.Sprintf("图片删除成功,共删除%d张", deleted), c)
 }
 
 // GetImage 获取图片文件
-// 参数: c - gin上下文
-// 说明: 根据URL参数返回图片文件,支持文件下载
-// 路由: GET /api/image?url=xxx
 func (ImageApi) GetImage(c *gin.Context) {
 	id := c.Query("id")
 
-	var img models.ImageModel
-	// 查询图片是否存在
-	if global.DB.Take(&img, "id = ?", id).Error != nil {
+	var imgID uint
+	if _, err := fmt.Sscanf(id, "%d", &imgID); err != nil {
+		response.FailWithMsg("图片已被删除", c)
+		return
+	}
+	meta, err := media_service.GetImageMeta(imgID)
+	if err != nil {
 		response.FailWithMsg("图片已被删除", c)
 		return
 	}
 
-	// 返回图片文件
-	c.File(img.Path)
+	data, err := media_service.GetBytes(context.Background(), meta.Path)
+	if err != nil {
+		response.FailWithMsg("图片已被删除", c)
+		return
+	}
+
+	contentType := mime.TypeByExtension(path.Ext(meta.Path))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	c.Data(http.StatusOK, contentType, data)
 }

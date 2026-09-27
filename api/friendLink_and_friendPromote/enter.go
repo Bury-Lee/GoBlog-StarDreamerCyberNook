@@ -3,9 +3,9 @@ package friendlink_and_friendpromote
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/community_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"fmt"
 
@@ -43,15 +43,7 @@ func (FriendApi) FriendLinkCreateView(c *gin.Context) {
 		response.FailWithMsg("参数绑定失败", c)
 		return
 	}
-	err := global.DB.Create(&models.FriendLink{
-		Name:      req.Name,
-		URL:       req.URL,
-		Logo:      req.Logo,
-		IsShow:    req.IsShow,
-		SortOrder: req.SortOrder,
-		Remark:    req.Remark,
-	}).Error
-	if err != nil {
+	if err := community_service.CreateFriendLink(req.Name, req.URL, req.Logo, req.IsShow, req.SortOrder, req.Remark); err != nil {
 		response.FailWithMsg("添加失败", c)
 		return
 	}
@@ -63,18 +55,14 @@ func (FriendApi) FriendLinkListView(c *gin.Context) {
 	c.ShouldBind(&req)
 
 	//管理员传 all=1 时返回全部数据(含已隐藏),否则隐藏后条目在后台无法再找到
-	model := models.FriendLink{IsShow: true}
+	all := false
 	if c.Query("all") == "1" {
 		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
-			model = models.FriendLink{}
+			all = true
 		}
 	}
 
-	list, count, capped, _ := common.ListQuery(model, common.Options{
-		PageInfo:      req,
-		AllowedOrders: []string{"id", "created_at", "sort_order"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	list, count, capped, _ := community_service.ListFriendLinks(all, req.Page, req.Limit, req.Order, req.EndId)
 	response.OkWithListCapped(list, count, capped, c)
 }
 
@@ -82,26 +70,19 @@ func (FriendApi) FriendLinkRemoveView(c *gin.Context) {
 	var req models.RemoveRequest
 	if err := c.ShouldBind(&req); err != nil {
 		response.FailWithMsg("参数错误", c)
-		return // 添加返回语句
+		return
 	}
-	// 执行删除操作
-	result := global.DB.Where("id IN ?", req.IDList).Delete(&models.FriendLink{})
-	if result.Error != nil {
+	if err := community_service.RemoveFriendLinks(req.IDList); err != nil {
 		response.FailWithMsg("删除失败", c)
 		return
 	}
-	response.OkWithMsg(fmt.Sprintf("成功删除%d个", result.RowsAffected), c)
+	response.OkWithMsg(fmt.Sprintf("成功删除%d个", len(req.IDList)), c)
 }
+
 func (FriendApi) FriendLinkUpdateView(c *gin.Context) {
 	var req models.IDRequest
 	if err := c.ShouldBindUri(&req); err != nil {
 		response.FailWithMsg("绑定参数失败", c)
-		return
-	}
-	var model models.FriendLink
-	err := global.DB.Take(&model, req.ID).Error
-	if err != nil {
-		response.FailWithMsg("未找到记录", c)
 		return
 	}
 	var data FriendLinkCreateRequest
@@ -109,14 +90,7 @@ func (FriendApi) FriendLinkUpdateView(c *gin.Context) {
 		response.FailWithMsg("绑定参数失败", c)
 		return
 	}
-	if err := global.DB.Model(&model).Updates(map[string]any{
-		"name":       data.Name,
-		"url":        data.URL,
-		"logo":       data.Logo,
-		"is_show":    data.IsShow,
-		"sort_order": data.SortOrder,
-		"remark":     data.Remark,
-	}).Error; err != nil {
+	if err := community_service.UpdateFriendLink(req.ID, data.Name, data.URL, data.Logo, data.IsShow, data.SortOrder, data.Remark); err != nil {
 		response.FailWithMsg("更新失败", c)
 	} else {
 		response.OkWithMsg("更新成功", c)
@@ -128,18 +102,14 @@ func (FriendApi) FriendPromotionListView(c *gin.Context) {
 	c.ShouldBind(&req)
 
 	//管理员传 all=1 时返回全部数据(含已隐藏)
-	model := models.FriendPromotion{IsShow: true}
+	all := false
 	if c.Query("all") == "1" {
 		if claims, err := jwts.ParseTokenByGin(c); err == nil && claims.Role == enum.AdminRole {
-			model = models.FriendPromotion{}
+			all = true
 		}
 	}
 
-	list, count, capped, _ := common.ListQuery(model, common.Options{
-		PageInfo:      req,
-		AllowedOrders: []string{"id", "created_at", "sort_order"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	list, count, capped, _ := community_service.ListFriendPromotions(all, req.Page, req.Limit, req.Order, req.EndId)
 	response.OkWithListCapped(list, count, capped, c)
 }
 
@@ -149,13 +119,11 @@ func (FriendApi) FriendPromotionRemoveView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	// 执行删除操作
-	result := global.DB.Where("id IN ?", req.IDList).Delete(&models.FriendPromotion{})
-	if result.Error != nil {
+	if err := community_service.RemoveFriendPromotions(req.IDList); err != nil {
 		response.FailWithMsg("删除失败", c)
 		return
 	}
-	response.OkWithMsg(fmt.Sprintf("成功删除%d个", result.RowsAffected), c)
+	response.OkWithMsg(fmt.Sprintf("成功删除%d个", len(req.IDList)), c)
 }
 
 func (FriendApi) FriendPromotionUpdateView(c *gin.Context) {
@@ -164,30 +132,14 @@ func (FriendApi) FriendPromotionUpdateView(c *gin.Context) {
 		response.FailWithMsg("绑定参数失败", c)
 		return
 	}
-	var friendPromotion models.FriendPromotion
-	err := global.DB.Take(&friendPromotion, idReq.ID).Error
-	if err != nil {
-		response.FailWithMsg("未找到记录", c)
-		return
-	}
 	var updateReq FriendPromotionCreateRequest
 	if err := c.ShouldBindJSON(&updateReq); err != nil {
 		response.FailWithMsg("绑定参数失败", c)
 		return
 	}
-	if err := global.DB.Model(&friendPromotion).Updates(map[string]any{
-		"title":          updateReq.Title,
-		"friend_name":    updateReq.FriendName,
-		"avatar":         updateReq.Avatar,
-		"category":       updateReq.Category,
-		"description":    updateReq.Description,
-		"preview_images": updateReq.PreviewImages,
-		"contact_info":   updateReq.ContactInfo,
-		"is_show":        updateReq.IsShow,
-		"sort_order":     updateReq.SortOrder,
-		"position":       updateReq.Position,
-		"remark":         updateReq.Remark,
-	}).Error; err != nil {
+	if err := community_service.UpdateFriendPromotion(idReq.ID, updateReq.Title, updateReq.FriendName, updateReq.Avatar,
+		updateReq.Category, updateReq.Description, updateReq.PreviewImages, updateReq.ContactInfo,
+		updateReq.IsShow, updateReq.SortOrder, updateReq.Position, updateReq.Remark); err != nil {
 		response.FailWithMsg("更新失败", c)
 	} else {
 		response.OkWithMsg("更新成功", c)
@@ -200,20 +152,8 @@ func (FriendApi) FriendPromotionCreateView(c *gin.Context) {
 		response.FailWithMsg("参数绑定失败", c)
 		return
 	}
-	err := global.DB.Create(&models.FriendPromotion{
-		Title:         req.Title,
-		FriendName:    req.FriendName,
-		Avatar:        req.Avatar,
-		Category:      req.Category,
-		Description:   req.Description,
-		PreviewImages: req.PreviewImages,
-		ContactInfo:   req.ContactInfo,
-		IsShow:        req.IsShow,
-		SortOrder:     req.SortOrder,
-		Position:      req.Position,
-		Remark:        req.Remark,
-	}).Error
-	if err != nil {
+	if err := community_service.CreateFriendPromotion(req.Title, req.FriendName, req.Avatar, req.Category,
+		req.Description, req.PreviewImages, req.ContactInfo, req.IsShow, req.SortOrder, req.Position, req.Remark); err != nil {
 		response.FailWithMsg("添加失败", c)
 		return
 	}

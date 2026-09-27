@@ -36,7 +36,7 @@ func (w *ResponseWriter) Header() http.Header {
 func LogMiddleware(c *gin.Context) {
 	log := log_service.NewActionLog(c) // 创建日志实例
 	log.SetRequest(c)
-
+	//TODO:仅在Debug模式下记录请求体
 	c.Set("log", log)
 
 	// 3. 替换 c.Writer 为我们的自定义响应写入器

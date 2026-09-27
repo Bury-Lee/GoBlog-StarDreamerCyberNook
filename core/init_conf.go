@@ -2,7 +2,6 @@ package core
 
 import (
 	"StarDreamerCyberNook/conf"
-	"StarDreamerCyberNook/flags"
 	"fmt"
 	"os"
 	"strings"
@@ -11,8 +10,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func ReadConf() *conf.Config {
-	byteData, err := os.ReadFile(flags.FlagOptions.File) //读取文件
+// ReadConf 读取并解析配置文件。
+func ReadConf(path string) *conf.Config {
+	byteData, err := os.ReadFile(path) //读取文件
 	if err != nil {
 		panic(err) //以后试试改为"无法读取配置文件"+err.Error()
 	}

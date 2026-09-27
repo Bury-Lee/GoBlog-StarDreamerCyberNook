@@ -36,10 +36,14 @@ go-blog
 ├─ router/              # 路由注册
 ├─ models/              # 数据模型与 ES Mapping
 ├─ service/             # 业务服务（含定时任务、ES服务、Redis服务）
+├─ services/            # 微服务组件（11 个 gRPC 服务）及其独立 cmd 入口
+├─ pkg/                 # 内核/基础设施：host(GoTenon)、hostapp、hostcfg、dbx、grpcx、discovery、svc、blog
 ├─ middleware/          # 中间件
 ├─ core/                # 配置/日志/DB/Redis/ES/AI 初始化
 ├─ conf/                # 配置结构体
 ├─ flags/               # 命令行参数（迁移、建索引、建用户）
+├─ gen/                 # protobuf/gRPC 生成代码
+├─ proto/               # protobuf 定义
 ├─ init/                # 本地依赖服务 docker-compose 与基础配置
 ├─ frontend/            # 内置 Vue 3 + TypeScript 前端（用户站 + 管理后台）
 ├─ setting.yaml         # 主配置文件
@@ -267,6 +271,46 @@ es:
   username: elastic
   password: es
 
+# 统一宿主：一个 main 进程运行 博客网关 + 各微服务组件（缺省 true）
+host:
+  enable: true
+
+# 服务发现：服务键 -> 实例地址列表（博客按此表经 sd:// 拨号）
+services:
+  ai: ["127.0.0.1:9210"]
+  search: ["127.0.0.1:9220"]
+  notify: ["127.0.0.1:9230"]
+  media: ["127.0.0.1:9240"]
+  auth: ["127.0.0.1:9250"]
+  content: ["127.0.0.1:9260"]
+  user: ["127.0.0.1:9270"]
+  message: ["127.0.0.1:9280"]
+  community: ["127.0.0.1:9290"]
+  log: ["127.0.0.1:9295"]
+  chat: ["127.0.0.1:9296"]
+
+# 启用哪些组件；缺省=全部启用。支持简写与完整写法：
+components:
+  host: true
+  blog: true
+  ai: true
+  search: true
+  notify: true
+  media: true
+  auth: true
+  content: true
+  user: true
+  message: true
+  community: true
+  log: true
+  chat: true
+  # content:                       # 完整写法：开关 + 组件配置
+  #   enabled: true
+  #   config:
+  #     dbStandalone: true         # 使用独立库（缺省复用宿主 global.DB）
+  #     driver: mysql
+  #     dsn: "user:pass@tcp(127.0.0.1:3306)/blog?charset=utf8mb4&parseTime=True&loc=Local"
+
 dbWrite: # 写库列表，至少配置一个
   - user: root
     password: root
@@ -372,19 +416,22 @@ go run main.go -f setting.yaml
 
 ## 📝 命令行参数
 
-| 参数                  | 说明                        |
-| ------------------- | ------------------------- |
-| `-f`                | 配置文件路径（默认 `setting.yaml`） |
-| `-db`               | 执行 GORM 自动迁移              |
-| `-es`               | 创建/重建 ES 索引               |
-| `-search`           | 重建数据库搜索表（ES 降级搜索）          |
-| `-v`                | 查看版本                      |
-| `-t user -s create` | 命令行创建用户                   |
+以下任务在服务启动前的 `main` 中一次性执行（涉及数据库的任务会先初始化共享库）：
+
+| 参数            | 说明                        |
+| ------------- | ------------------------- |
+| `-f <path>`   | 配置文件路径（默认 `setting.yaml`） |
+| `-db`         | 执行 GORM 自动迁移              |
+| `-es`         | 创建/重建 ES 索引               |
+| `-search`     | 重建数据库搜索表（ES 降级搜索）          |
+| `-create-user` | 交互式创建用户                   |
+| `-v`          | 查看版本                      |
 
 **示例：**
 
 ```bash
-go run main.go -t user -s create
+go run main.go -db
+go run main.go -create-user
 ```
 
 ## ⚙️ 关键运行说明
@@ -397,6 +444,8 @@ go run main.go -t user -s create
 
 - **搜索模式**：`es.enabled=true` 时使用 Elasticsearch；关闭时降级到 `article_search_models` 表（支持标签过滤与多种排序），可用 `-search` 重建
 - **清理任务**：`SyncCleanHistory` 每 10 分钟清理超过 30 天的浏览记录
+- **统一宿主**：`host.enable=true`（缺省）时一个进程内运行博客网关与全部启用组件，由 GoTenon 按依赖/波次顺序启停；`components` 选择启用哪些（缺省=全部）
+- **数据库共享**：宿主初始化唯一的 `global.DB`（连接池 `10/100/1h` + 读写分离）；微服务默认复用该句柄，单进程仅 **1 个**连接池。设 `components.<name>.config.dbStandalone=true`（配合 `driver`/`dsn`）可让某服务自建独立库。`common.ListQuery` 现显式接收各服务的 `*gorm.DB`
 
 ## 🔄 数据库同步（不提供依赖）
 

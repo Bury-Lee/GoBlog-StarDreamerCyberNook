@@ -5,8 +5,7 @@ import (
 	"strings"
 
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/content_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
 	"github.com/gin-gonic/gin"
@@ -53,14 +52,10 @@ func (CommentApi) CommentInteractionView(c *gin.Context) {
 		}
 	}
 
-	diggedIDs := make([]uint, 0)
-	if len(ids) > 0 {
-		if err := global.DB.Model(&models.CommentDiggModel{}).
-			Where("user_id = ? and comment_id in ?", claims.UserID, ids).
-			Pluck("comment_id", &diggedIDs).Error; err != nil {
-			response.FailWithMsg("查询评论点赞状态失败", c)
-			return
-		}
+	diggedIDs, err := content_service.CommentDiggIDs(claims.UserID, ids)
+	if err != nil {
+		response.FailWithMsg("查询评论点赞状态失败", c)
+		return
 	}
 
 	response.OkWithData(CommentInteractionResponse{DiggedIDs: diggedIDs}, c)

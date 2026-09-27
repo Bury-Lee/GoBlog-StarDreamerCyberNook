@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package community.v1;
+
+option go_package = "StarDreamerCyberNook/gen/community/v1;communityv1";
+
+// CommunityService 拥有社区内容域:反馈 / 轮播图 / 友链 / 友情推广。
+service CommunityService {
+  rpc CreateFeedback(CreateFeedbackRequest) returns (Empty);
+  rpc ListFeedbacks(ListFeedbacksRequest) returns (FeedbackListReply);
+  rpc HandleFeedback(HandleFeedbackRequest) returns (FeedbackReply);
+
+  rpc CreateBanner(BannerWrite) returns (Empty);
+  rpc ListBanners(ListRequest) returns (BannerListReply);
+  rpc RemoveBanners(IDs) returns (Empty);
+  rpc UpdateBanner(UpdateBannerRequest) returns (Empty);
+
+  rpc CreateFriendLink(FriendLinkWrite) returns (Empty);
+  rpc ListFriendLinks(ListRequest) returns (FriendLinkListReply);
+  rpc RemoveFriendLinks(IDs) returns (Empty);
+  rpc UpdateFriendLink(UpdateFriendLinkRequest) returns (Empty);
+
+  rpc CreateFriendPromotion(FriendPromotionWrite) returns (Empty);
+  rpc ListFriendPromotions(ListRequest) returns (FriendPromotionListReply);
+  rpc RemoveFriendPromotions(IDs) returns (Empty);
+  rpc UpdateFriendPromotion(UpdateFriendPromotionRequest) returns (Empty);
+}
+
+message Empty {}
+message IDs { repeated uint64 ids = 1; }
+message ListRequest {
+  bool   all    = 1; // 管理员:包含隐藏项
+  int32  page   = 2;
+  int32  limit  = 3;
+  string order  = 4;
+  uint64 end_id = 5;
+}
+
+message Feedback {
+  uint64 id           = 1;
+  uint64 user_id      = 2;
+  bool   is_anonymous = 3;
+  string content      = 4;
+  string contact      = 5;
+  int32  type         = 6;
+  int32  status       = 7;
+  string reply        = 8;
+  uint64 handler_id   = 9;
+  int64  created_at   = 10;
+  int64  updated_at   = 11;
+}
+message CreateFeedbackRequest {
+  uint64 user_id      = 1;
+  bool   is_anonymous = 2;
+  string content      = 3;
+  string contact      = 4;
+  int32  type         = 5;
+}
+message ListFeedbacksRequest {
+  optional int32 status = 1;
+  optional int32 type   = 2;
+  int32          page   = 3;
+  int32          limit  = 4;
+  string         order  = 5;
+  uint64         end_id = 6;
+}
+message FeedbackListReply {
+  repeated Feedback list   = 1;
+  int64             count  = 2;
+  bool              capped = 3;
+}
+message HandleFeedbackRequest {
+  uint64 id         = 1;
+  int32  status     = 2;
+  string reply      = 3;
+  uint64 handler_id = 4;
+}
+message FeedbackReply { Feedback feedback = 1; }
+
+message Banner {
+  uint64 id         = 1;
+  bool   is_show    = 2;
+  string cover      = 3;
+  string href       = 4;
+  int64  created_at = 5;
+  int64  updated_at = 6;
+}
+message BannerWrite {
+  string cover   = 1;
+  string href    = 2;
+  bool   is_show = 3;
+}
+message UpdateBannerRequest {
+  uint64 id      = 1;
+  string cover   = 2;
+  string href    = 3;
+  bool   is_show = 4;
+}
+message BannerListReply {
+  repeated Banner list   = 1;
+  int64           count  = 2;
+  bool            capped = 3;
+}
+
+message FriendLink {
+  uint64 id         = 1;
+  string name       = 2;
+  string url        = 3;
+  string logo       = 4;
+  bool   is_show    = 5;
+  int32  sort_order = 6;
+  string remark     = 7;
+  int64  created_at = 8;
+  int64  updated_at = 9;
+}
+message FriendLinkWrite {
+  string name       = 1;
+  string url        = 2;
+  string logo       = 3;
+  bool   is_show    = 4;
+  int32  sort_order = 5;
+  string remark     = 6;
+}
+message UpdateFriendLinkRequest {
+  uint64 id         = 1;
+  string name       = 2;
+  string url        = 3;
+  string logo       = 4;
+  bool   is_show    = 5;
+  int32  sort_order = 6;
+  string remark     = 7;
+}
+message FriendLinkListReply {
+  repeated FriendLink list   = 1;
+  int64               count  = 2;
+  bool                capped = 3;
+}
+
+message FriendPromotion {
+  uint64          id             = 1;
+  string          title          = 2;
+  string          friend_name    = 3;
+  string          avatar         = 4;
+  string          category       = 5;
+  string          description    = 6;
+  string          preview_images = 7;
+  repeated string contact_info   = 8;
+  bool            is_show        = 9;
+  int32           sort_order     = 10;
+  string          position       = 11;
+  string          remark         = 12;
+  int64           created_at     = 13;
+  int64           updated_at     = 14;
+}
+message FriendPromotionWrite {
+  string          title          = 1;
+  string          friend_name    = 2;
+  string          avatar         = 3;
+  string          category       = 4;
+  string          description    = 5;
+  string          preview_images = 6;
+  repeated string contact_info   = 7;
+  bool            is_show        = 8;
+  int32           sort_order     = 9;
+  string          position       = 10;
+  string          remark         = 11;
+}
+message UpdateFriendPromotionRequest {
+  uint64          id             = 1;
+  string          title          = 2;
+  string          friend_name    = 3;
+  string          avatar         = 4;
+  string          category       = 5;
+  string          description    = 6;
+  string          preview_images = 7;
+  repeated string contact_info   = 8;
+  bool            is_show        = 9;
+  int32           sort_order     = 10;
+  string          position       = 11;
+  string          remark         = 12;
+}
+message FriendPromotionListReply {
+  repeated FriendPromotion list   = 1;
+  int64                    count  = 2;
+  bool                     capped = 3;
+}

@@ -2,9 +2,8 @@ package user_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
-	"StarDreamerCyberNook/utils/ip"
+	"StarDreamerCyberNook/service/user_service"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -38,34 +37,25 @@ func (UserApi) CheckUserBaseInfoView(c *gin.Context) {
 		return
 	}
 
-	// 2. 查询用户基本信息
-	var user models.UserModel // 用户模型实例
-	if err := global.DB.Take(&user, req.ID).Error; err != nil {
+	// 2. 查询用户基本信息(下沉 user 服务,含文章/粉丝/关注计数)
+	info, err := user_service.GetUserBaseInfo(req.ID)
+	if err != nil {
 		response.FailWithMsg("用户不存在呢", c)
 		return
 	}
 
-	region := ip.GetIpAddr(user.IP)
-	// 3. 初始化响应数据，填充用户基本信息
-
-	cout := make([]int64, 3)
-	//统计环节
-	global.DB.Model(&models.ArticleModel{}).Where("user_id = ?", user.ID).Count(&cout[0])
-	global.DB.Model(&models.UserFollowModel{}).Where("focus_user_id = ?", user.ID).Count(&cout[1])
-	global.DB.Model(&models.UserFollowModel{}).Where("user_id = ?", user.ID).Count(&cout[2])
-
 	var result = UserBaseInfoResponse{
-		UserID:        user.ID,
-		Age:           user.Age,
-		NickName:      user.NickName,
-		Avatar:        user.Avatar,
-		LastLoginTime: user.LastLoginTime,
-		ExistDay:      user.ExistDays(),
-		Region:        region,
+		UserID:        info.UserID,
+		Age:           info.Age,
+		NickName:      info.NickName,
+		Avatar:        info.Avatar,
+		LastLoginTime: info.LastLoginTime,
+		ExistDay:      info.ExistDay,
+		Region:        info.Region,
 
-		ArticleCount: cout[0],
-		FansCount:    cout[1],
-		FollowCount:  cout[2],
+		ArticleCount: info.ArticleCount,
+		FansCount:    info.FansCount,
+		FollowCount:  info.FollowCount,
 	}
 
 	// 6. 返回成功响应，包含用户完整的基本信息数据

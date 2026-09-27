@@ -1,16 +1,18 @@
 package article_api
 
 import (
+	"context"
+	"fmt"
+	"strconv"
+
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
 	"StarDreamerCyberNook/service/ai_service"
+	"StarDreamerCyberNook/service/content_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
-	"context"
-	"fmt"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -21,14 +23,13 @@ type ArticleCreateRequest struct {
 	Abstract    string        `json:"abstract"`                   // 文章摘要，最大256字符
 	Content     string        `json:"content" binding:"required"` // 文章内容
 	CategoryID  *uint         `json:"categoryID"`                 // 文章分类ID，关联分类表
-	TagList     []string      `json:"tagList"`                    // 标签列表，JSON序列化存储 //serializer:json要删掉?似乎要换成自己定义的taglist数据类型
+	TagList     []string      `json:"tagList"`                    // 标签列表
 	Cover       string        `json:"cover"`                      // 文章封面图片URL
-	OpenComment bool          `json:"openComment"`                // 是否开启评论：true-开启 false-关闭
-	Stats       models.Status `json:"status"`                     //状态,普通用户只能设置为草稿或者审核中,管理员可设置为任意值
+	OpenComment bool          `json:"openComment"`                // 是否开启评论
+	Stats       models.Status `json:"status"`                     // 状态(普通用户仅草稿/审核中)
 }
 
 func (ArticleApi) ArticleCreateView(c *gin.Context) {
-	//注:刚创建的文章不可能成为热门文章,所以不需要在这里使用Redis
 	var req ArticleCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.FailWithMsg("文章参数绑定失败: "+err.Error(), c)
@@ -58,16 +59,6 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 		//未启用审核且设置为审核中状态时跳过审核
 	}
 
-	//判断分类id是否为自己创建
-	var category models.CategoryModel
-	if req.CategoryID != nil && *req.CategoryID != 0 {
-		err := global.DB.Take(&category, "id = ? and user_id = ?", *req.CategoryID, User.ID).Error
-		if err != nil {
-			response.FailWithMsg("分类不存在", c)
-			return
-		}
-	}
-
 	//防xss注入
 	xssFilter := xss_filter.NewXSSFilter()
 	req.Title = xss_filter.SanitizeText(req.Title)
@@ -78,14 +69,11 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 	}
 	//不传简介时就设为无,传了就做清洗
 	if req.Abstract != "" {
-		xssFilter := xss_filter.NewXSSFilter()
-		req.Abstract = xssFilter.Sanitize(req.Abstract)
+		x := xss_filter.NewXSSFilter()
+		req.Abstract = x.Sanitize(req.Abstract)
 	} else {
 		req.Abstract = "该文章未设置简介"
 	}
-
-	// 正文内容图片转存
-	// 但是吧,如果图片过多时，同步做，接口耗时高,异步做又很麻烦...但是以后肯定要考虑变成异步的
 
 	if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination { //启用ai审核
 		reply, err := ai_service.CreateSingleReply(
@@ -97,8 +85,7 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 			response.FailWithMsg("ai审核失败,已经自动创建为待审核状态", c)
 			return
 		}
-		switch reply { //TODO:这里无论成功还是失败都应该插入消息,告知原因
-		//注:一般我们认为ai审核是很迅速的,可以在3秒内看到结果,所以不考虑发送消息通知
+		switch reply {
 		case "通过":
 			req.Stats = models.StatusPublished
 		case "拒绝":
@@ -109,20 +96,7 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 		}
 	}
 
-	// 构建模型实例
-	var article = models.ArticleModel{
-		Title:       req.Title,       // 文章标题
-		UserID:      User.ID,         // 用户ID
-		Abstract:    req.Abstract,    // 文章摘要
-		Content:     req.Content,     // 文章内容
-		CategoryID:  req.CategoryID,  // 分类ID
-		TagList:     req.TagList,     // 标签列表 (确保模型层字段类型兼容 []string 或已配置 GORM serializer)
-		Cover:       req.Cover,       // 封面图
-		OpenComment: req.OpenComment, // 是否开启评论
-		Status:      req.Stats,
-	}
-
-	//生成AI点评(摘要+评级),此时文章还没有ID,待文章创建成功后再写入独立的AI点评表
+	//生成AI点评(摘要+评级)
 	var aiQuality, aiAbstract string
 	if global.Config.AI.Enable {
 		if reply, e := ai_service.GenerateArticleAbstract(req.Title, req.Abstract, req.Content); e != nil {
@@ -136,27 +110,29 @@ func (ArticleApi) ArticleCreateView(c *gin.Context) {
 			aiQuality = reply
 		}
 	}
-	if err = global.DB.Create(&article).Error; err != nil {
+
+	// 经 content 服务持久化(分类归属校验、AI点评写入均在服务端)
+	articleID, cerr := content_service.CreateArticle(content_service.CreateReq{
+		UserID:      User.ID,
+		Title:       req.Title,
+		Abstract:    req.Abstract,
+		Content:     req.Content,
+		CategoryID:  req.CategoryID,
+		TagList:     req.TagList,
+		Cover:       req.Cover,
+		OpenComment: req.OpenComment,
+		Status:      req.Stats,
+		AIQuality:   aiQuality,
+		AIAbstract:  aiAbstract,
+		AIModel:     global.Config.AI.Model,
+	})
+	if cerr != nil {
 		response.FailWithMsg("文章创建失败", c)
 		return
 	}
 
-	//将AI点评写入文章扩展附录表(含AI模型名),失败不影响文章创建,可由定时任务补全
-	if aiQuality != "" || aiAbstract != "" {
-		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
-			Assign(map[string]any{
-				"ai_quality":  aiQuality,
-				"ai_abstract": aiAbstract,
-				"ai_model":    global.Config.AI.Model,
-			}).
-			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
-			logrus.Errorf("保存AI点评失败,文章 %d 将由定时任务补全: %s", article.ID, e.Error())
-		}
-	}
-
-	//清理可能存在的负缓存:SQLite等数据库删除最新文章后会复用ID,
-	//新文章可能命中上一条"文章不存在"的负缓存,导致作者自己都打不开
-	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(article.ID), 10))
+	//清理可能存在的负缓存(SQLite等复用ID)
+	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(articleID), 10))
 
 	response.OkWithMsg(fmt.Sprintf("文章创建成功,当前状态:%s", req.Stats.String()), c)
 }

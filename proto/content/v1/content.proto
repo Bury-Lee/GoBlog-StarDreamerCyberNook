@@ -1,0 +1,687 @@
+syntax = "proto3";
+
+package content.v1;
+
+option go_package = "StarDreamerCyberNook/gen/content/v1;contentv1";
+
+// ContentService 拥有文章内容域(逐步铺开:列表 → 详情 → 写入)。
+service ContentService {
+  rpc ListArticles(ListArticlesRequest) returns (ListArticlesReply);
+  rpc GetArticle(GetArticleRequest) returns (GetArticleReply);
+  rpc RemoveArticles(RemoveArticlesRequest) returns (RemoveArticlesReply);
+  rpc CreateArticle(CreateArticleRequest) returns (CreateArticleReply);
+  rpc UpdateArticle(UpdateArticleRequest) returns (UpdateArticleReply);
+
+  rpc ToggleArticleDigg(ToggleArticleDiggRequest) returns (ToggleArticleDiggReply);
+  rpc GetArticleInteraction(GetArticleInteractionRequest) returns (GetArticleInteractionReply);
+  rpc TopArticle(TopArticleRequest) returns (Empty);
+  rpc CancelArticleTop(CancelArticleTopRequest) returns (Empty);
+  rpc AdminCancelArticleTop(CancelArticleTopRequest) returns (Empty);
+
+  rpc RecordArticleLook(RecordArticleLookRequest) returns (RecordArticleLookReply);
+  rpc ListArticleLook(ListArticleLookRequest) returns (ListArticleLookReply);
+  rpc RemoveArticleLook(RemoveArticleLookRequest) returns (RemoveArticleLookReply);
+
+  rpc ListArticlesByStatus(ListArticlesByStatusRequest) returns (ArticleListReply);
+  rpc PendingBatch(PendingBatchRequest) returns (ArticleListReply);
+  rpc CountArticlesByStatus(CountArticlesRequest) returns (CountArticlesReply);
+  rpc SetArticleStatus(SetArticleStatusRequest) returns (Empty);
+  rpc SetArticleAddition(SetArticleAdditionRequest) returns (Empty);
+
+  rpc UserTopArticles(UserTopArticlesRequest) returns (UserTopArticlesReply);
+  rpc AdminTopArticleIDs(Empty) returns (ArticleIDsReply);
+  rpc GetArticlesByIDs(GetArticlesByIDsRequest) returns (GetArticlesByIDsReply);
+
+  rpc ToggleArticleCollect(ToggleCollectRequest) returns (ToggleCollectReply);
+  rpc CreateCollectFolder(CreateFolderRequest) returns (Empty);
+  rpc UpdateCollectFolder(UpdateFolderRequest) returns (Empty);
+  rpc RemoveCollectFolders(RemoveFoldersRequest) returns (RemoveFoldersReply);
+  rpc ListCollectFolders(ListFoldersRequest) returns (ListFoldersReply);
+  rpc GetCollectFolder(GetFolderRequest) returns (CollectFolderReply);
+  rpc ListCollectArticles(ListCollectArticlesRequest) returns (ArticleListReply);
+
+  rpc CreateCategory(CreateCategoryRequest) returns (CreateCategoryReply);
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesReply);
+  rpc RemoveCategories(RemoveCategoriesRequest) returns (RemoveCategoriesReply);
+  rpc CategoryOptions(CategoryOptionsRequest) returns (CategoryOptionsReply);
+
+  rpc CreateComment(CreateCommentRequest) returns (CreateCommentReply);
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsReply);
+  rpc ListChildComments(ListCommentsRequest) returns (ListCommentsReply);
+  rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentReply);
+  rpc ToggleCommentDigg(ToggleCommentDiggRequest) returns (ToggleCommentDiggReply);
+  rpc CommentDiggIDs(CommentDiggIDsRequest) returns (CommentDiggIDsReply);
+
+  rpc CreateMoment(CreateMomentRequest) returns (MomentReply);
+  rpc ListMoments(ListMomentsRequest) returns (ListMomentsReply);
+  rpc GetMoment(GetMomentRequest) returns (MomentReply);
+  rpc UpdateMoment(UpdateMomentRequest) returns (UpdateMomentReply);
+  rpc RemoveMoment(RemoveMomentRequest) returns (RemoveMomentReply);
+  rpc MomentInteraction(MomentInteractionRequest) returns (MomentInteractionReply);
+  rpc ToggleMomentDigg(ToggleMomentDiggRequest) returns (ToggleMomentDiggReply);
+  rpc RepostMoment(RepostMomentRequest) returns (MomentReply);
+
+  rpc CreateMomentComment(CreateMomentCommentRequest) returns (MomentCommentReply);
+  rpc ListMomentComments(ListMomentCommentsRequest) returns (ListMomentCommentsReply);
+  rpc ListMomentChildComments(ListMomentChildCommentsRequest) returns (ListMomentCommentsReply);
+  rpc DeleteMomentComment(DeleteMomentCommentRequest) returns (DeleteMomentCommentReply);
+  rpc ToggleMomentCommentDigg(ToggleMomentCommentDiggRequest) returns (ToggleMomentCommentDiggReply);
+}
+
+message Article {
+  uint64          id            = 1;
+  string          title         = 2;
+  string          abstract      = 3;
+  string          content       = 4;
+  optional uint64 category_id   = 5;
+  repeated string tag_list      = 6;
+  string          cover         = 7;
+  uint64          user_id       = 8;
+  int32           look_count    = 9;
+  int32           digg_count    = 10;
+  int32           comment_count = 11;
+  int32           collect_count = 12;
+  bool            open_comment  = 13;
+  int32           status        = 14;
+  int64           created_at    = 15; // Unix 毫秒
+  int64           updated_at    = 16; // Unix 毫秒
+}
+
+message ArticleAddition {
+  string admin_comment = 1;
+  string ai_quality    = 2;
+  string ai_abstract   = 3;
+  string ai_model      = 4;
+}
+
+message ArticleListItem {
+  Article article         = 1;
+  bool    user_top        = 2;
+  bool    admin_top       = 3;
+  string  category_title  = 4;
+  string  user_nick_name  = 5;
+  string  avatar          = 6;
+}
+
+message ListArticlesRequest {
+  uint64          user_id     = 1;
+  optional uint64 category_id = 2;
+  optional int32  status      = 3;
+  string          order       = 4;
+  string          key         = 5;
+  int32           page        = 6;
+  int32           limit       = 7;
+  uint64          end_id      = 8;
+  repeated uint64 top_ids     = 9; // 置顶文章(用于排序加权)
+}
+
+message ListArticlesReply {
+  repeated ArticleListItem list   = 1;
+  int64                    count  = 2;
+  bool                     capped = 3;
+}
+
+message GetArticleRequest {
+  uint64 id = 1;
+}
+
+message GetArticleReply {
+  Article         article        = 1;
+  string          category_title = 2;
+  string          user_name      = 3;
+  string          nick_name      = 4;
+  string          user_avatar    = 5;
+  ArticleAddition addition       = 6;
+}
+
+message RemoveArticlesRequest {
+  repeated uint64 ids      = 1;
+  optional uint64 owner_id = 2; // 若设置,则校验这些文章都属于该用户
+}
+
+message RemoveArticlesReply {
+  int32           deleted = 1;
+  repeated string titles  = 2; // 被删除文章标题(用于通知)
+}
+
+message CreateArticleRequest {
+  uint64          user_id     = 1;
+  string          title       = 2;
+  string          abstract    = 3;
+  string          content     = 4;
+  optional uint64 category_id = 5;
+  repeated string tag_list    = 6;
+  string          cover       = 7;
+  bool            open_comment = 8;
+  int32           status      = 9;
+  string          ai_quality  = 10; // AI点评(可选)
+  string          ai_abstract = 11;
+  string          ai_model    = 12;
+}
+
+message CreateArticleReply {
+  uint64 id = 1;
+}
+
+message TagListUpdate {
+  repeated string tags = 1;
+}
+
+// UpdateArticleRequest 为增量补丁:仅"已设置"的字段会被更新。
+message UpdateArticleRequest {
+  uint64          id            = 1;
+  uint64          owner_id      = 2; // 归属校验
+  optional string title         = 3;
+  optional string abstract      = 4;
+  optional string content       = 5;
+  optional uint64 category_id   = 6; // 设为 0 表示清空分类
+  optional bool   open_comment  = 7;
+  optional string cover         = 8;
+  optional int32  status        = 9;
+  optional TagListUpdate tag_list = 10;
+  string          ai_quality    = 11;
+  string          ai_abstract   = 12;
+  string          ai_model      = 13;
+}
+
+message UpdateArticleReply {}
+
+message Category {
+  uint64 id         = 1;
+  string title      = 2;
+  uint64 user_id    = 3;
+  int64  created_at = 4;
+  int64  updated_at = 5;
+}
+
+message CategoryOption {
+  uint64 value = 1;
+  string label = 2;
+}
+
+message CreateCategoryRequest {
+  optional uint64 id = 1; // 为空或 0 表示创建,否则更新
+  string          title   = 2;
+  uint64          user_id = 3;
+}
+message CreateCategoryReply {
+  uint64 id = 1;
+}
+
+message ListCategoriesRequest {
+  uint64 user_id   = 1;
+  bool   with_user = 2; // 是否预加载所属用户(管理员)
+  int32  page      = 3;
+  int32  limit     = 4;
+  string key       = 5;
+  string order     = 6;
+}
+message CategoryListItem {
+  Category category      = 1;
+  int32    article_count = 2;
+  string   nickname      = 3;
+  string   avatar        = 4;
+}
+message ListCategoriesReply {
+  repeated CategoryListItem list   = 1;
+  int64                     count  = 2;
+  bool                      capped = 3;
+}
+
+message RemoveCategoriesRequest {
+  repeated uint64 ids     = 1;
+  uint64          user_id = 2;
+  bool            all     = 3; // true=管理员可删除任意分类
+}
+message RemoveCategoriesReply {
+  int32 deleted = 1;
+}
+
+message CategoryOptionsRequest {
+  uint64 user_id = 1;
+}
+message CategoryOptionsReply {
+  repeated CategoryOption options = 1;
+}
+
+// User 为评论作者的精简信息(仅实际赋值字段, 保证与既有 JSON 一致)。
+message CommentUser {
+  uint64          id             = 1;
+  int64           created_at     = 2;
+  int64           updated_at     = 3;
+  string          nickname       = 4;
+  string          avatar         = 5;
+  int32           age            = 6;
+  repeated string like_tags      = 7;
+  int64           last_login_time = 8;
+}
+
+message Comment {
+  uint64          id             = 1;
+  string          content        = 2;
+  uint64          user_id        = 3;
+  uint64          article_id     = 4;
+  string          path           = 5;
+  optional uint64 root_parent_id = 6;
+  int32           digg_count     = 7;
+  int64           created_at     = 8;
+  int64           updated_at     = 9;
+  CommentUser     user           = 10;
+}
+
+message CreateCommentRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+  uint64 parent_id  = 3;
+  string content    = 4;
+}
+message CreateCommentReply {
+  uint64          id                  = 1;
+  repeated uint64 reply_rev_user_ids  = 2;
+  uint64          article_user_id     = 3;
+}
+
+message ListCommentsRequest {
+  uint64 article_id = 1; // 一级评论用;子评论接口传 root 作为 article_id 字段不适用
+  uint64 root_id    = 2; // 子评论根ID
+  int32  page       = 3;
+  int32  limit      = 4;
+  string key        = 5;
+  string order      = 6;
+  uint64 end_id     = 7;
+}
+message ListCommentsReply {
+  repeated Comment list   = 1;
+  int64            count  = 2;
+  bool             capped = 3;
+}
+
+message DeleteCommentRequest {
+  uint64 id       = 1;
+  uint64 user_id  = 2;
+  bool   is_admin = 3;
+}
+message DeleteCommentReply {
+  uint64 article_id = 1;
+  int32  delta      = 2;
+  bool   ok         = 3;
+}
+
+message ToggleCommentDiggRequest {
+  uint64 comment_id = 1;
+  uint64 user_id    = 2;
+}
+message ToggleCommentDiggReply {
+  bool  digged          = 1;
+  int32 base_digg_count = 2;
+}
+
+message CommentDiggIDsRequest {
+  uint64          user_id     = 1;
+  repeated uint64 comment_ids = 2;
+}
+message CommentDiggIDsReply {
+  repeated uint64 digged_ids = 1;
+}
+
+message Moment {
+  uint64          id             = 1;
+  uint64          user_id        = 2;
+  CommentUser     user           = 3;
+  int32           type           = 4;  // 0动态 1日记
+  int32           visibility     = 5;  // 0公开 1仅好友 2私密
+  string          content        = 6;
+  repeated string images         = 7;
+  int32           like_count     = 8;
+  int32           comment_count  = 9;
+  int32           repost_count   = 10;
+  optional uint64 repost_from_id = 11;
+  Moment          repost_from    = 12; // 仅一层
+  int32           status         = 13;
+  int64           created_at     = 14;
+  int64           updated_at     = 15;
+}
+
+message MomentReply {
+  Moment moment = 1;
+}
+
+message CreateMomentRequest {
+  uint64          user_id    = 1;
+  int32           type       = 2;
+  int32           visibility = 3;
+  string          content    = 4;
+  repeated string images     = 5;
+  int32           status     = 6;
+}
+
+message ListMomentsRequest {
+  uint64          viewer_id = 1;
+  bool            is_admin  = 2;
+  uint64          user_id   = 3;
+  optional int32  type      = 4;
+  int32           page      = 5;
+  int32           limit     = 6;
+  string          key       = 7;
+  string          order     = 8;
+  uint64          end_id    = 9;
+}
+message ListMomentsReply {
+  repeated Moment list   = 1;
+  int64           count  = 2;
+  bool            capped = 3;
+}
+
+message GetMomentRequest {
+  uint64 id        = 1;
+  uint64 viewer_id = 2;
+  bool   is_admin  = 3;
+}
+
+message UpdateMomentRequest {
+  uint64          id         = 1;
+  uint64          user_id    = 2;
+  string          content    = 3;
+  repeated string images     = 4;
+  int32           type       = 5;
+  int32           visibility = 6;
+  int32           status     = 7;
+}
+message UpdateMomentReply {}
+
+message RemoveMomentRequest {
+  uint64 id       = 1;
+  uint64 user_id  = 2;
+  bool   is_admin = 3;
+}
+message RemoveMomentReply {}
+
+message MomentInteractionRequest {
+  uint64 id        = 1;
+  uint64 viewer_id = 2;
+}
+message MomentInteractionReply {
+  bool digged = 1;
+}
+
+message ToggleMomentDiggRequest {
+  uint64 id      = 1;
+  uint64 user_id = 2;
+}
+message ToggleMomentDiggReply {
+  bool  digged     = 1;
+  int32 like_count = 2;
+}
+
+message RepostMomentRequest {
+  uint64 id         = 1;
+  uint64 user_id    = 2;
+  uint64 viewer_id  = 3;
+  bool   is_admin   = 4;
+  string content    = 5;
+  int32  visibility = 6;
+}
+
+message MomentComment {
+  uint64          id             = 1;
+  uint64          moment_id      = 2;
+  uint64          user_id        = 3;
+  CommentUser     user           = 4;
+  string          content        = 5;
+  optional uint64 root_parent_id = 6;
+  string          path           = 7;
+  int32           digg_count     = 8;
+  int64           created_at     = 9;
+  int64           updated_at     = 10;
+}
+message MomentCommentReply {
+  MomentComment comment = 1;
+}
+
+message CreateMomentCommentRequest {
+  uint64 user_id    = 1;
+  uint64 moment_id  = 2;
+  uint64 parent_id  = 3;
+  string content    = 4;
+  uint64 viewer_id  = 5;
+  bool   is_admin   = 6;
+}
+
+message ListMomentCommentsRequest {
+  uint64 moment_id = 1;
+  uint64 viewer_id = 2;
+  bool   is_admin  = 3;
+  int32  page      = 4;
+  int32  limit     = 5;
+  string key       = 6;
+  string order     = 7;
+  uint64 end_id    = 8;
+}
+message ListMomentChildCommentsRequest {
+  uint64 root_id = 1;
+  int32  page    = 2;
+  int32  limit   = 3;
+  string key     = 4;
+  string order   = 5;
+  uint64 end_id  = 6;
+}
+message ListMomentCommentsReply {
+  repeated MomentComment list   = 1;
+  int64                   count  = 2;
+  bool                    capped = 3;
+}
+
+message DeleteMomentCommentRequest {
+  uint64 id       = 1;
+  uint64 user_id  = 2;
+  bool   is_admin = 3;
+}
+message DeleteMomentCommentReply {}
+
+message ToggleMomentCommentDiggRequest {
+  uint64 id      = 1;
+  uint64 user_id = 2;
+}
+message ToggleMomentCommentDiggReply {
+  bool  digged     = 1;
+  int32 digg_count = 2;
+}
+
+message Empty {}
+
+message ToggleArticleDiggRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+}
+message ToggleArticleDiggReply {
+  bool digged  = 1;
+  bool changed = 2; // 状态是否真正发生改变(用于决定是否回退缓存计数)
+}
+
+message GetArticleInteractionRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+}
+message GetArticleInteractionReply {
+  bool digged    = 1;
+  bool collected = 2;
+}
+
+message TopArticleRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+  bool   is_admin   = 3;
+  int32  max_top    = 4; // 非管理员用户的置顶上限
+}
+message CancelArticleTopRequest {
+  uint64 user_id    = 1; // 置顶记录所属用户(管理员强制取消时填目标用户)
+  uint64 article_id = 2;
+}
+
+message RecordArticleLookRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+}
+message RecordArticleLookReply {
+  bool   created       = 1; // false 表示当日已读过,无需再创建
+  string article_title = 2;
+}
+
+message ArticleLookItem {
+  uint64 id         = 1;
+  int64  look_date  = 2;
+  string title      = 3;
+  string cover      = 4;
+  string nickname   = 5;
+  string avatar     = 6;
+  uint64 user_id    = 7;
+  uint64 article_id = 8;
+}
+message ListArticleLookRequest {
+  uint64 user_id       = 1;
+  uint64 viewer_id     = 2;
+  bool   viewer_logged = 3;
+  int32  page          = 4;
+  int32  limit         = 5;
+  string order         = 6;
+  uint64 end_id        = 7;
+}
+message ListArticleLookReply {
+  repeated ArticleLookItem list   = 1;
+  int64                    count  = 2;
+  bool                     capped = 3;
+}
+
+message RemoveArticleLookRequest {
+  uint64          user_id = 1;
+  repeated uint64 ids     = 2;
+}
+message RemoveArticleLookReply {
+  int32 deleted = 1;
+}
+
+message ArticleListReply {
+  repeated Article list   = 1;
+  int64            count  = 2;
+  bool             capped = 3;
+}
+message ListArticlesByStatusRequest {
+  int32           status  = 1;
+  uint64          user_id = 2;
+  repeated uint64 ids     = 3;
+  string          key     = 4;
+  int32           page    = 5;
+  int32           limit   = 6;
+  string          order   = 7;
+  uint64          end_id  = 8;
+}
+message PendingBatchRequest {
+  uint64 after_id = 1; // 游标:仅取 id > after_id
+  int32  limit    = 2;
+}
+message CountArticlesRequest { int32 status = 1; }
+message CountArticlesReply   { int64 count = 1; }
+message SetArticleStatusRequest {
+  uint64 id     = 1;
+  int32  status = 2;
+}
+message SetArticleAdditionRequest {
+  uint64 article_id  = 1;
+  string ai_quality  = 2;
+  string ai_abstract = 3;
+  string ai_model    = 4;
+}
+
+message UserTopArticle {
+  uint64 article_id = 1;
+  bool   is_admin   = 2;
+}
+message UserTopArticlesRequest { uint64 user_id = 1; }
+message UserTopArticlesReply   { repeated UserTopArticle list = 1; }
+
+message ArticleIDsReply { repeated uint64 ids = 1; }
+
+message ArticleDetailItem {
+  Article         article        = 1;
+  optional string category_title = 2;
+  string          nick_name      = 3;
+  string          avatar         = 4;
+}
+message GetArticlesByIDsRequest {
+  repeated uint64 ids            = 1;
+  bool            published_only = 2;
+}
+message GetArticlesByIDsReply {
+  repeated ArticleDetailItem list = 1;
+}
+
+message ToggleCollectRequest {
+  uint64 user_id    = 1;
+  uint64 article_id = 2;
+  uint64 collect_id = 3; // 0 表示默认收藏夹
+}
+message ToggleCollectReply {
+  string action = 1; // created | removed | moved
+}
+
+message CreateFolderRequest {
+  uint64 user_id  = 1;
+  string title    = 2;
+  string abstract = 3;
+  string cover    = 4;
+}
+message UpdateFolderRequest {
+  uint64 user_id = 1;
+  uint64 id      = 2;
+  string patch   = 3; // JSON:列名 -> 值
+}
+message RemoveFoldersRequest {
+  uint64          user_id  = 1;
+  bool            is_admin = 2;
+  repeated uint64 ids      = 3;
+}
+message RemoveFoldersReply {
+  map<uint64, int32> article_deltas = 1; // 文章ID -> 收藏数回退增量(负数)
+  int32              deleted        = 2; // 实际删除的收藏夹数量
+}
+
+message CollectFolder {
+  uint64 id         = 1;
+  uint64 user_id    = 2;
+  string title      = 3;
+  string abstract   = 4;
+  string cover      = 5;
+  bool   is_public  = 6;
+  bool   is_default = 7;
+  int64  created_at = 8;
+  int64  updated_at = 9;
+}
+message ListFoldersRequest {
+  uint64 user_id         = 1;
+  bool   include_private = 2; // 本人/管理员为 true;否则仅公开
+  string key             = 3;
+  int32  page            = 4;
+  int32  limit           = 5;
+  string order           = 6;
+  uint64 end_id          = 7;
+}
+message ListFoldersReply {
+  repeated CollectFolder list   = 1;
+  int64                  count  = 2;
+  bool                   capped = 3;
+}
+
+message GetFolderRequest { uint64 id = 1; }
+message CollectFolderReply {
+  CollectFolder folder        = 1;
+  int64         article_count = 2;
+}
+
+message ListCollectArticlesRequest {
+  uint64 folder_id = 1;
+  string key       = 2;
+  int32  page      = 3;
+  int32  limit     = 4;
+  string order     = 5;
+  uint64 end_id    = 6;
+}

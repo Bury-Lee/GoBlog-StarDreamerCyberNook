@@ -1,16 +1,16 @@
 package article_api
 
 import (
-	"StarDreamerCyberNook/common"
-	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
-	"StarDreamerCyberNook/models/enum"
-	jwts "StarDreamerCyberNook/utils/jwts"
 	"fmt"
 
+	"StarDreamerCyberNook/common"
+	"StarDreamerCyberNook/common/response"
+	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/content_service"
+	jwts "StarDreamerCyberNook/utils/jwts"
+
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 type CategoryCreateRequest struct {
@@ -18,49 +18,27 @@ type CategoryCreateRequest struct {
 	Title string `json:"title" binding:"required,max=32"`
 }
 
+// CategoryCreateView 创建/更新分类(经 content 服务)。
 func (ArticleApi) CategoryCreateView(c *gin.Context) {
 	var req CategoryCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.FailWithMsg("请求参数错误", c)
 		return
 	}
-
 	claims := jwts.GetClaims(c)
-	var model models.CategoryModel
+
+	if err := content_service.CreateCategory(req.ID, req.Title, claims.UserID); err != nil {
+		if req.ID == 0 {
+			response.FailWithMsg("分类名称重复或创建失败", c)
+		} else {
+			response.FailWithMsg("更新分类错误", c)
+		}
+		return
+	}
 	if req.ID == 0 {
-		// 创建
-		err := global.DB.Take(&model, "user_id = ? and title = ?", claims.UserID, req.Title).Error
-		if err == nil {
-			response.FailWithMsg("分类名称重复", c)
-			return
-		}
-
-		err = global.DB.Create(&models.CategoryModel{
-			Title:  req.Title,
-			UserID: claims.UserID,
-		}).Error
-		if err != nil {
-			response.FailWithMsg("创建分类错误", c)
-			return
-		}
-
 		response.OkWithMsg("创建分类成功", c)
 		return
 	}
-
-	err := global.DB.Take(&model, "user_id = ? and id = ?", claims.UserID, req.ID).Error
-	if err != nil {
-		response.FailWithMsg("分类不存在", c)
-		return
-	}
-
-	err = global.DB.Model(&model).Update("title", req.Title).Error
-
-	if err != nil {
-		response.FailWithMsg("更新分类错误", c)
-		return
-	}
-
 	response.OkWithMsg("更新分类成功", c)
 }
 
@@ -77,6 +55,7 @@ type CategoryListResponse struct {
 	Avatar       string `json:"avatar,omitempty"`
 }
 
+// CategoryListView 分类列表(经 content 服务)。
 func (ArticleApi) CategoryListView(c *gin.Context) {
 	var req CategoryListRequest
 	if err := c.ShouldBind(&req); err != nil {
@@ -84,7 +63,7 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 		return
 	}
 
-	var preload []string
+	withUser := false
 	switch req.Type {
 	case "self":
 		claims, err := jwts.ParseTokenByGin(c)
@@ -108,95 +87,64 @@ func (ArticleApi) CategoryListView(c *gin.Context) {
 			response.FailWithMsg("权限错误", c)
 			return
 		}
-		preload = append(preload, "UserModel")
+		withUser = true
 	default:
 		response.FailWithMsg("类型错误", c)
 		return
 	}
-	_list, count, capped, _ := common.ListQuery(models.CategoryModel{
-		UserID: req.UserID,
-	}, common.Options{
-		PageInfo:      req.PageInfo,
-		Likes:         []string{"title"},
-		Preloads:      preload,
-		AllowedOrders: []string{"id", "created_at"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
 
-	//一次性聚合统计各分类的文章数,避免Preload把分类下全部文章加载进内存
-	countMap := make(map[uint]int, len(_list))
-	if len(_list) > 0 {
-		categoryIDs := make([]uint, 0, len(_list))
-		for _, item := range _list {
-			categoryIDs = append(categoryIDs, item.ID)
-		}
-		type categoryCount struct {
-			CategoryID uint
-			Cnt        int
-		}
-		var rows []categoryCount
-		if err := global.DB.Model(&models.ArticleModel{}).
-			Select("category_id, count(*) as cnt").
-			Where("category_id in ?", categoryIDs).
-			Group("category_id").
-			Scan(&rows).Error; err != nil {
-			logrus.Errorf("统计分类文章数失败: %v", err)
-		}
-		for _, row := range rows {
-			countMap[row.CategoryID] = row.Cnt
-		}
+	items, count, capped, err := content_service.ListCategories(req.UserID, withUser, req.Page, req.Limit, req.Key, req.Order)
+	if err != nil {
+		response.FailWithMsg("查询失败", c)
+		return
 	}
 
-	var list = make([]CategoryListResponse, 0)
-	for _, i2 := range _list {
+	list := make([]CategoryListResponse, 0, len(items))
+	for _, it := range items {
 		list = append(list, CategoryListResponse{
-			CategoryModel: i2,
-			ArticleCount:  countMap[i2.ID],
-			Nickname:      i2.UserModel.NickName,
-			Avatar:        i2.UserModel.Avatar,
+			CategoryModel: models.CategoryModel{
+				Model:  models.Model{ID: it.Category.ID, CreatedAt: it.Category.CreatedAt, UpdatedAt: it.Category.UpdatedAt},
+				Title:  it.Category.Title,
+				UserID: it.Category.UserID,
+			},
+			ArticleCount: it.ArticleCount,
+			Nickname:     it.Nickname,
+			Avatar:       it.Avatar,
 		})
 	}
-
 	response.OkWithListCapped(list, count, capped, c)
 }
 
+// CategoryRemoveView 删除分类(经 content 服务)。
 func (ArticleApi) CategoryRemoveView(c *gin.Context) {
 	var req = models.RemoveRequest{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.FailWithMsg("请求参数错误", c)
 		return
 	}
-
-	var list []models.CategoryModel
-	query := global.DB.Where("id in ?", req.IDList)
 	claims := jwts.GetClaims(c)
-	if claims.Role != enum.AdminRole {
-		query.Where("user_id = ?", claims.UserID)
+	all := claims.Role == enum.AdminRole
+
+	deleted, err := content_service.RemoveCategories(req.IDList, claims.UserID, all)
+	if err != nil {
+		response.FailWithMsg("删除分类失败", c)
+		return
 	}
-
-	global.DB.Where(query).Find(&list)
-
-	if len(list) > 0 {
-		err := global.DB.Delete(&list).Error
-		if err != nil {
-			logrus.Error("删除分类失败", err)
-			response.FailWithMsg("删除分类失败", c)
-			return
-		}
-	}
-
-	msg := fmt.Sprintf("删除分类成功 共删除%d条", len(list))
-
-	response.OkWithMsg(msg, c)
+	response.OkWithMsg(fmt.Sprintf("删除分类成功 共删除%d条", deleted), c)
 }
 
-func (ArticleApi) CategoryOptionsView(c *gin.Context) { //是文章分类选项列表接口
+// CategoryOptionsView 分类选项列表(经 content 服务)。
+func (ArticleApi) CategoryOptionsView(c *gin.Context) {
 	claims := jwts.GetClaims(c)
 
-	var list []models.OptionsResponse[uint]
-	global.DB.Model(models.CategoryModel{}).Where("user_id = ?", claims.UserID).
-		Select("id as value", "title as label").Scan(&list)
-
+	opts, err := content_service.CategoryOptions(claims.UserID)
+	if err != nil {
+		response.FailWithMsg("查询失败", c)
+		return
+	}
+	list := make([]models.OptionsResponse[uint], 0, len(opts))
+	for _, o := range opts {
+		list = append(list, models.OptionsResponse[uint]{Key: o.Label, Value: o.Value})
+	}
 	response.OkWithData(list, c)
-
 }

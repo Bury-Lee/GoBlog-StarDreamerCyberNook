@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -86,6 +87,7 @@ func (t *FileFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 // ============ 文件 Hook（关键修改） ============
 type FileDateHook struct {
+	mu       sync.Mutex // 保护 file / fileDate,Fire 可能被多 goroutine 并发调用
 	file     *os.File
 	logPath  string
 	fileDate string
@@ -94,32 +96,49 @@ type FileDateHook struct {
 	formatter *FileFormatter
 }
 
-func (hook FileDateHook) Levels() []logrus.Level {
+func (hook *FileDateHook) Levels() []logrus.Level {
 	return logrus.AllLevels
 }
 
-func (hook FileDateHook) Fire(entry *logrus.Entry) error {
-	timer := entry.Time.Format("2006-01-02")
-
+func (hook *FileDateHook) Fire(entry *logrus.Entry) error {
 	// 使用 FileFormatter 格式化（无颜色）
 	line, err := hook.formatter.Format(entry)
 	if err != nil {
 		return err
 	}
 
-	if hook.fileDate == timer {
-		hook.file.Write(line)
-		return nil
+	timer := entry.Time.Format("2006-01-02")
+
+	hook.mu.Lock()
+	defer hook.mu.Unlock()
+
+	// 日期切换时切换到新文件(仅在变化时执行,避免每条日志重复开闭文件)
+	if hook.fileDate != timer {
+		if err := hook.rotate(timer); err != nil {
+			return err
+		}
 	}
 
-	// 日期切换，创建新文件
-	hook.file.Close()
-	os.MkdirAll(fmt.Sprintf("%s/%s", hook.logPath, timer), 0750)
-	filename := fmt.Sprintf("%s/%s/%s.log", hook.logPath, timer, hook.appName)
+	_, err = hook.file.Write(line)
+	return err
+}
 
-	hook.file, _ = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
-	hook.fileDate = timer
-	hook.file.Write(line)
+// rotate 关闭旧文件并按日期打开新文件。调用方需持有 hook.mu。
+func (hook *FileDateHook) rotate(date string) error {
+	if hook.file != nil {
+		_ = hook.file.Close()
+	}
+	dir := fmt.Sprintf("%s/%s", hook.logPath, date)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return err
+	}
+	filename := fmt.Sprintf("%s/%s/%s.log", hook.logPath, date, hook.appName)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	hook.file = f
+	hook.fileDate = date
 	return nil
 }
 

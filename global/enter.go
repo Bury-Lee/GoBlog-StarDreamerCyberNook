@@ -9,8 +9,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/mojocn/base64Captcha"
-	"github.com/olivere/elastic/v7"
-	"github.com/sashabaranov/go-openai"
 	"gorm.io/gorm"
 )
 
@@ -21,8 +19,6 @@ var (
 	RedisHotPool     *redis.Client
 	CaptchaStore     = base64Captcha.DefaultMemStore
 	EmailVerifyStore = sync.Map{}
-	ES               *elastic.Client
-	AIClient         *openai.Client
 	IPsearcher       *xdb.Searcher
 	StorageClient    *minio.Client
 )

@@ -1,0 +1,10 @@
+# ai 服务配置(文件为主;环境变量 AI_* 可选覆盖)
+listen: 0.0.0.0:9210
+
+ai:
+  host: ""              # OpenAI 兼容 BaseURL(如 https://api.deepseek.com)
+  apiKey: ""            # 密钥(建议经环境变量 AI_API_KEY 注入,勿提交明文)
+  apiType: ""           # 接口类型,留空默认
+  model: "gpt-3.5-turbo"
+  temperature: 0.7
+  maxTokens: 1024

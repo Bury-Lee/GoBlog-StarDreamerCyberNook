@@ -1,11 +1,13 @@
 // service/review_service/article_review.go
 // 文章审核共用逻辑:人工审核、接口AI审核与定时任务AI审核共用,保证各链路的缓存清理与通知行为一致
+// 说明:文章状态/附录的落库下沉 content 服务;AI、站内消息与详情缓存属网关编排,保留在此。
 package review_service
 
 import (
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/ai_service"
+	"StarDreamerCyberNook/service/content_service"
 	"StarDreamerCyberNook/service/message_service"
 	"context"
 	"fmt"
@@ -34,23 +36,16 @@ type ArticleAIReviewItem struct {
 // ApplyArticleReview 更新文章审核状态、清理详情缓存并给作者发送系统通知
 // 说明:人工审核、接口AI审核与定时AI审核共用
 func ApplyArticleReview(article *models.ArticleModel, status models.Status, msg string) error {
-	if err := global.DB.Model(article).Update("status", status).Error; err != nil {
+	if err := content_service.SetArticleStatus(article.ID, status); err != nil {
 		return err
 	}
 	article.Status = status
 
 	//启用AI时,审核通过(变为已发布)顺带刷新文章的AI点评,写入扩展附录表(记录AI模型名)
-	//说明:AI定时审核(SyncAIReview)、接口AI审核与人工审核共用此处,保证点评与审核结果一致
 	if status == models.StatusPublished && global.Config.AI.Enable {
 		if quality, summary, err := ai_service.CommentArticle(article.Title, article.Abstract, article.Content); err != nil {
 			logrus.Errorf("更新文章 %d 的AI点评失败: %v", article.ID, err)
-		} else if err := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
-			Assign(map[string]any{
-				"ai_quality":  quality,
-				"ai_abstract": summary,
-				"ai_model":    global.Config.AI.Model,
-			}).
-			FirstOrCreate(&models.ArticleAddition{}).Error; err != nil {
+		} else if err := content_service.SetArticleAddition(article.ID, quality, summary, global.Config.AI.Model); err != nil {
 			logrus.Errorf("保存文章 %d 的AI点评失败: %v", article.ID, err)
 		}
 	}
@@ -120,8 +115,8 @@ func reviewOneArticle(article *models.ArticleModel) ArticleAIReviewItem {
 
 // HasPendingArticles 是否存在待审核文章,供定时任务在探测AI服务前先行判断,避免无意义的探活请求
 func HasPendingArticles() (bool, error) {
-	var count int64
-	if err := global.DB.Model(&models.ArticleModel{}).Where("status = ?", models.StatusPending).Count(&count).Error; err != nil {
+	count, err := content_service.CountArticlesByStatus(models.StatusPending)
+	if err != nil {
 		return false, err
 	}
 	return count > 0, nil
@@ -132,13 +127,19 @@ func HasPendingArticles() (bool, error) {
 // 参数:limit - 本次最多审核的篇数
 // 审核规则:通过->已发布, 拒绝->草稿(退回作者), 无法判定->保持审核中等待人工处理
 func ReviewPendingArticles(idList []uint, limit int) ([]ArticleAIReviewItem, error) {
-	query := global.DB.Where("status = ?", models.StatusPending)
-	if len(idList) > 0 {
-		query = query.Where("id in ?", idList)
-	}
 	var articles []models.ArticleModel
-	if err := query.Order("id asc").Limit(limit).Find(&articles).Error; err != nil {
-		return nil, err
+	if len(idList) > 0 {
+		list, _, _, err := content_service.ListArticlesByStatus(models.StatusPending, 0, idList, "", 0, limit, "id", 0)
+		if err != nil {
+			return nil, err
+		}
+		articles = list
+	} else {
+		list, err := content_service.PendingBatch(0, limit)
+		if err != nil {
+			return nil, err
+		}
+		articles = list
 	}
 
 	list := make([]ArticleAIReviewItem, 0, len(articles))
@@ -171,12 +172,7 @@ func ReviewAllPendingArticles(batchSize int, sleep time.Duration) (total, succes
 			return total, success, failed, nil
 		}
 
-		var articles []models.ArticleModel
-		err = global.DB.
-			Where("status = ? and id > ?", models.StatusPending, cursor).
-			Order("id asc").
-			Limit(batchSize).
-			Find(&articles).Error
+		articles, err := content_service.PendingBatch(cursor, batchSize)
 		if err != nil {
 			return total, success, failed, err
 		}

@@ -1,0 +1,216 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "StarDreamerCyberNook/gen/user/v1;userv1";
+
+// UserService 拥有用户关系域(关注/粉丝/好友),逐步铺开。
+service UserService {
+  rpc Follow(FollowRequest) returns (FollowReply);
+  rpc Unfollow(FollowRequest) returns (FollowReply);
+  rpc FollowCheck(CheckRequest) returns (CheckReply);
+  rpc FollowingList(ListRequest) returns (FollowItemListReply);
+  rpc FollowerList(ListRequest) returns (FollowRecordListReply);
+  rpc FriendList(ListRequest) returns (FollowItemListReply);
+
+  rpc GetUserByLogin(LoginLookupRequest) returns (LoginLookupReply);
+  rpc RecordLogin(RecordLoginRequest) returns (Empty);
+  rpc GetUserDetail(IDRequest) returns (UserDetailReply);
+  rpc GetUserBaseInfo(IDRequest) returns (UserBaseInfoReply);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersReply);
+  rpc UpdateUser(UpdateUserRequest) returns (Empty);
+
+  rpc EmailExists(EmailExistsRequest) returns (EmailExistsReply);
+  rpc CreateUserByEmail(CreateUserByEmailRequest) returns (CreateUserByEmailReply);
+  rpc UpdateUserEmail(UpdateUserEmailRequest) returns (Empty);
+  rpc UpdatePassword(UpdatePasswordRequest) returns (Empty);
+  rpc ListLoginLogs(ListLoginLogsRequest) returns (ListLoginLogsReply);
+}
+
+message Empty {}
+message IDRequest { uint64 id = 1; }
+
+// GetUserByLogin:kind 取 user_name / email。
+message LoginLookupRequest {
+  string kind = 1;
+  string val  = 2;
+}
+message LoginLookupReply {
+  uint64 id        = 1;
+  string user_name = 2;
+  int32  role      = 3;
+  string password  = 4; // 哈希密码,仅用于网关本地校验
+}
+
+message RecordLoginRequest {
+  uint64 user_id    = 1;
+  string ip         = 2; // 原始 IP(落库)
+  string addr       = 3; // IP 归属地
+  string user_agent = 4;
+}
+
+message UserDetailReply {
+  uint64              id                 = 1;
+  int64               created_at         = 2;
+  int64               updated_at         = 3;
+  string              user_name          = 4;
+  string              nick_name          = 5;
+  string              avatar             = 6;
+  string              abstract           = 7;
+  int32               age                = 8;
+  repeated string     like_tags          = 9;
+  map<string, string> contact_info       = 10;
+  int32               role               = 11;
+  optional int64      update_username_date = 12;
+  bool                open_follow        = 13;
+  bool                open_fans          = 14;
+  uint64              home_style_id      = 15;
+  string              email              = 16;
+}
+
+message UserBaseInfoReply {
+  uint64 user_id         = 1;
+  int32  age             = 2;
+  string nick_name       = 3;
+  string avatar          = 4;
+  int64  last_login_time = 5;
+  string region          = 6;
+  int32  exist_day       = 7;
+  int64  article_count   = 8;
+  int64  fans_count      = 9;
+  int64  follow_count    = 10;
+}
+
+message ListUsersRequest {
+  int32  page    = 1;
+  int32  limit   = 2;
+  string order   = 3;
+  string key     = 4;
+  uint64 end_id  = 5;
+  uint64 user_id = 6; // 非 0 时按 ID 精确匹配
+}
+message UserListItem {
+  uint64 id        = 1;
+  string nick_name = 2;
+  string avatar    = 3;
+  string abstract  = 4;
+}
+message ListUsersReply {
+  repeated UserListItem list   = 1;
+  int64                 count  = 2;
+  bool                  capped = 3;
+}
+
+// UpdateUserRequest:补丁以 JSON 对象传递(列名 -> 值),与既有 StructToMap 语义一致。
+message UpdateUserRequest {
+  uint64 user_id    = 1;
+  string user_patch = 2; // UserModel 列补丁(JSON),空表示不更新
+  string conf_patch = 3; // UserConfModel 列补丁(JSON),空表示不更新
+}
+
+message EmailExistsRequest { string email = 1; }
+message EmailExistsReply   { bool exists = 1; }
+
+message CreateUserByEmailRequest {
+  string email         = 1;
+  string nick_name     = 2;
+  string user_name     = 3;
+  string password_hash = 4;
+  int32  role          = 5;
+}
+message CreateUserByEmailReply {
+  uint64 id        = 1;
+  string user_name = 2;
+  int32  role      = 3;
+}
+
+message UpdateUserEmailRequest {
+  uint64 user_id = 1;
+  string email   = 2;
+}
+message UpdatePasswordRequest {
+  uint64 user_id       = 1;
+  string password_hash = 2;
+}
+
+message LoginLog {
+  uint64 id         = 1;
+  uint64 user_id    = 2;
+  string ip         = 3;
+  string addr       = 4;
+  string user_agent = 5;
+  int64  created_at = 6;
+  string nickname   = 7;
+  string avatar     = 8;
+}
+message ListLoginLogsRequest {
+  uint64 user_id    = 1;
+  string ip         = 2;
+  string addr       = 3;
+  string start_time = 4;
+  string end_time   = 5;
+  int32  page       = 6;
+  int32  limit      = 7;
+  string order      = 8;
+  uint64 end_id     = 9;
+  bool   with_user  = 10; // 是否预加载用户昵称/头像(管理员)
+}
+message ListLoginLogsReply {
+  repeated LoginLog list   = 1;
+  int64             count  = 2;
+  bool              capped = 3;
+}
+
+message FollowRequest {
+  uint64 user_id       = 1;
+  uint64 focus_user_id = 2;
+}
+message FollowReply {
+  bool already = 1; // 已关注时为 true
+}
+
+message CheckRequest {
+  uint64 user_id       = 1;
+  uint64 focus_user_id = 2;
+}
+message CheckReply {
+  bool followed = 1;
+}
+
+message ListRequest {
+  uint64 user_id       = 1; // 被查询的用户
+  uint64 viewer_id     = 2; // 访问者(未登录为 0)
+  bool   viewer_logged = 3;
+  int32  page          = 4;
+  int32  limit         = 5;
+  string order         = 6;
+  uint64 end_id        = 7;
+}
+
+// FollowItem 关注条目的展示信息。
+message FollowItem {
+  uint64 focus_user_id = 1;
+  string nickname      = 2;
+  string avatar        = 3;
+  string abstract      = 4;
+  int64  created_at    = 5;
+}
+message FollowItemListReply {
+  repeated FollowItem list   = 1;
+  int64               count  = 2;
+  bool                capped = 3;
+}
+
+// FollowRecord 原始关注记录(粉丝列表用)。
+message FollowRecord {
+  uint64 id            = 1;
+  uint64 user_id       = 2;
+  uint64 focus_user_id = 3;
+  bool   friend        = 4;
+  int64  created_at    = 5;
+}
+message FollowRecordListReply {
+  repeated FollowRecord list   = 1;
+  int64                 count  = 2;
+  bool                  capped = 3;
+}

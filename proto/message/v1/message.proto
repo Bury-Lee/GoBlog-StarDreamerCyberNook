@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package message.v1;
+
+option go_package = "StarDreamerCyberNook/gen/message/v1;messagev1";
+
+// MessageService 拥有站内信域:读接口 + 各业务关注的 Insert 通知。
+service MessageService {
+  rpc List(ListRequest) returns (ListReply);
+  rpc UnreadCounts(UnreadRequest) returns (UnreadReply);
+  rpc Remove(BatchRequest) returns (Empty);
+  rpc OneKeyRead(OneKeyReadRequest) returns (Empty);
+  rpc GetConf(ConfUserRequest) returns (ConfReply);
+  rpc UpdateConf(UpdateConfRequest) returns (Empty);
+
+  rpc InsertComment(InsertCommentRequest) returns (Empty);
+  rpc InsertReply(InsertCommentRequest) returns (Empty);
+  rpc InsertSystem(SystemMessage) returns (Empty);
+  rpc InsertAt(InsertAtRequest) returns (Empty);
+  rpc InsertArticleDigg(InsertDiggRequest) returns (Empty);
+  rpc InsertCollect(InsertCollectRequest) returns (Empty);
+}
+
+message Empty {}
+
+message Message {
+  uint64 id                   = 1;
+  int32  type                 = 2;
+  uint64 rev_user_id          = 3;
+  uint64 action_user_id       = 4;
+  string action_user_nickname = 5;
+  string action_user_avatar   = 6;
+  string title                = 7;
+  string content              = 8;
+  uint64 article_id           = 9;
+  string article_title        = 10;
+  uint64 comment_id           = 11;
+  string link_title           = 12;
+  string link_href            = 13;
+  bool   is_read              = 14;
+  int64  created_at           = 15;
+  int64  updated_at           = 16;
+}
+
+message ListRequest {
+  uint64 user_id = 1;
+  int32  type    = 2;
+  int32  page    = 3;
+  int32  limit   = 4;
+  string order   = 5;
+  uint64 end_id  = 6;
+  string key     = 7;
+}
+message ListReply {
+  repeated Message list   = 1;
+  int64            count  = 2;
+  bool             capped = 3;
+}
+
+message UnreadRequest { uint64 user_id = 1; }
+message UnreadReply   { map<int32, int64> counts = 1; }
+
+message BatchRequest {
+  uint64          user_id = 1;
+  repeated uint64 ids     = 2;
+}
+
+message OneKeyReadRequest {
+  uint64 user_id                 = 1;
+  bool   comment_message         = 2;
+  bool   digg_and_collect_message = 3;
+  bool   private_message         = 4;
+  bool   system_message          = 5;
+}
+
+message ConfUserRequest { uint64 user_id = 1; }
+message ConfReply {
+  uint64 user_id              = 1;
+  bool   open_comment_message = 2;
+  bool   open_reply_message   = 3;
+  bool   open_digg_message    = 4;
+  bool   open_collect_message = 5;
+  bool   open_private_message = 6;
+}
+message UpdateConfRequest {
+  uint64          user_id              = 1;
+  optional bool   open_comment_message = 2;
+  optional bool   open_reply_message   = 3;
+  optional bool   open_digg_message    = 4;
+  optional bool   open_collect_message = 5;
+  optional bool   open_private_message = 6;
+}
+
+message InsertCommentRequest {
+  uint64 rev_user_id    = 1;
+  uint64 action_user_id = 2;
+  uint64 article_id     = 3;
+  uint64 comment_id     = 4;
+  string content        = 5;
+}
+
+message SystemMessage {
+  uint64 rev_user_id          = 1;
+  uint64 action_user_id       = 2;
+  string action_user_nickname = 3;
+  string action_user_avatar   = 4;
+  string title                = 5;
+  uint64 article_id           = 6;
+  string article_title        = 7;
+  uint64 comment_id           = 8;
+  string content              = 9;
+  string link_title           = 10;
+  string link_href            = 11;
+}
+
+message InsertAtRequest {
+  uint64 rev_user_id          = 1;
+  uint64 action_user_id       = 2;
+  string action_user_nickname = 3;
+  string action_user_avatar   = 4;
+}
+
+message InsertDiggRequest {
+  uint64 action_user_id = 1;
+  uint64 article_id     = 2;
+}
+message InsertCollectRequest {
+  uint64 action_user_id = 1;
+  uint64 article_id     = 2;
+}

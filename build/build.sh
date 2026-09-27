@@ -24,21 +24,30 @@ build() {
     local goos="$1"
     local goarch="$2"
     local output="$3"
+    local pkg="${4:-.}"
     echo "==> 构建 $goos/$goarch -> $output"
     (
         cd "$ROOT_DIR"
         CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-            go build -ldflags="$LDFLAGS" -trimpath -o "$OUT_DIR/$output" .
+            go build -ldflags="$LDFLAGS" -trimpath -o "$OUT_DIR/$output" "$pkg"
     )
 }
 
+# 博客主程序
 build windows amd64 main_windows_amd64.exe
 build linux   amd64 main_linux_amd64
 build darwin  amd64 main_macos_amd64
 
+# 统一宿主(按蓝图在同一进程装载/启停多个微服务组件)
+build windows amd64 host_windows_amd64.exe ./cmd/host
+build linux   amd64 host_linux_amd64     ./cmd/host
+build darwin  amd64 host_macos_amd64     ./cmd/host
+
 if [ "${BUILD_ARM64:-0}" = "1" ]; then
     build linux  arm64 main_linux_arm64
     build darwin arm64 main_macos_arm64
+    build linux  arm64 host_linux_arm64 ./cmd/host
+    build darwin arm64 host_macos_arm64 ./cmd/host
 fi
 
 if [ "${SKIP_FRONTEND:-0}" != "1" ]; then

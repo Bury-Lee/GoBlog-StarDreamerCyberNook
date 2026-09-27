@@ -2,17 +2,17 @@ package message_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/message_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
 	"github.com/gin-gonic/gin"
 )
 
 type MessageRemoveRequest struct {
-	MessageID []uint `json:"messageID"` // 消息ID//其实使用model.RemoveRequest也是可以的
+	MessageID []uint `json:"messageID"`
 }
 
+// MessageRemoveView 删除消息
 func (MessageApi) MessageRemoveView(c *gin.Context) {
 	var req MessageRemoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -24,7 +24,7 @@ func (MessageApi) MessageRemoveView(c *gin.Context) {
 		return
 	}
 	claim := jwts.GetClaims(c)
-	if err := global.DB.Model(&models.MessageModel{}).Where("rev_user_id = ?", claim.UserID).Where("id in ?", req.MessageID).Delete(&models.MessageModel{}).Error; err != nil { //删除接收者是自己的ID为req的消息
+	if err := message_service.Remove(claim.UserID, req.MessageID); err != nil {
 		response.FailWithMsg("删除消息失败", c)
 		return
 	}

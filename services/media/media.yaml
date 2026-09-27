@@ -1,0 +1,14 @@
+# media 服务配置(文件为主;环境变量 MEDIA_* 可选覆盖)
+listen: 0.0.0.0:9240
+backend: local          # local | minio
+
+# 本地后端根目录(backend=local)
+localDir: "uploads"
+
+# 对象存储(backend=minio)
+minio:
+  host: ""
+  accessKey: ""
+  secretKey: ""         # 建议经环境变量 MEDIA_MINIO_SECRET_KEY 注入
+  bucket: ""
+  region: ""

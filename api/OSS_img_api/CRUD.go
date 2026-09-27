@@ -1,24 +1,26 @@
 package OSS_img_api
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"mime"
+	"net/http"
+	"path"
+
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/log_service"
+	"StarDreamerCyberNook/service/media_service"
 	"StarDreamerCyberNook/utils"
-	"bytes"
-	"context"
-	"fmt"
-	"io"
 
 	"github.com/gin-gonic/gin"
-	"github.com/minio/minio-go/v7"
 	"github.com/sirupsen/logrus"
 )
 
 // ImageListResponse 图片列表响应结构体
-// 说明: 包含图片模型和Web访问路径
 type ImageListResponse struct {
 	models.ImageModel
 	WebPath string `json:"webPath"` // Web访问路径
@@ -26,9 +28,10 @@ type ImageListResponse struct {
 
 // RemoveRequest 图片删除请求结构体
 type RemoveRequest struct {
-	IDlist []uint `json:"IDlist" binding:"required"` // 要删除的图片ID列表
+	IDlist []uint `json:"IDlist" binding:"required"`
 }
 
+// ImageUploadView 上传图片(存储与元数据均经 media 服务)。
 func (OSSImgApi) ImageUploadView(c *gin.Context) {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
@@ -36,14 +39,12 @@ func (OSSImgApi) ImageUploadView(c *gin.Context) {
 		return
 	}
 
-	// 文件大小判断
 	s := global.Config.Upload.Size
 	if fileHeader.Size > s*1024*1024 {
 		response.FailWithMsg(fmt.Sprintf("文件大小大于%dMB", s), c)
 		return
 	}
 
-	// 后缀判断
 	filename := fileHeader.Filename
 	suffix, ok := utils.ImageSuffixJudge(filename)
 	if !ok {
@@ -51,7 +52,6 @@ func (OSSImgApi) ImageUploadView(c *gin.Context) {
 		return
 	}
 
-	// 打开文件流并一次性读取到内存
 	file, err := fileHeader.Open()
 	if err != nil {
 		response.FailWithError(err, c)
@@ -64,107 +64,63 @@ func (OSSImgApi) ImageUploadView(c *gin.Context) {
 		return
 	}
 
-	// 魔数校验:文件内容必须与后缀匹配,防止伪造图片
 	if !utils.ImageContentJudge(suffix, byteData) {
 		response.FailWithMsg("文件内容与图片格式不符", c)
 		return
 	}
 
-	// 计算 hash
 	hash := utils.Md5(byteData)
-
-	// 判断这个 hash 有没有
-	var model models.ImageModel
-	err = global.DB.Take(&model, "hash = ?", hash).Error
-	if err == nil {
-		logrus.Infof("上传图片重复 %s = %s  %s", filename, model.Filename, hash)
-		response.Ok(model.ID, "上传成功", c)
+	if found, id, err := media_service.ImageExistsByHash(hash); err == nil && found {
+		logrus.Infof("上传图片重复 %s hash=%s id=%d", filename, hash, id)
+		response.Ok(id, "上传成功", c)
 		return
 	}
 
-	// 上传到 MinIO
-	objectName := fmt.Sprintf("%s/%s.%s", global.Config.Upload.UploadDir, hash, suffix)
-	ctx := context.Background()
+	objectName := path.Join(global.Config.Upload.UploadDir, fmt.Sprintf("%s.%s", hash, suffix))
+	if err := media_service.Put(context.Background(), objectName, byteData, utils.GetContentType(suffix)); err != nil {
+		response.FailWithError(fmt.Errorf("上传失败: %v", err), c)
+		return
+	}
 
-	_, err = global.StorageClient.PutObject(
-		ctx,
-		global.Config.ObjectStorage.Bucket,
-		objectName,
-		bytes.NewReader(byteData),
-		int64(len(byteData)),
-		minio.PutObjectOptions{
-			ContentType: utils.GetContentType(suffix),
-		},
-	)
+	id, err := media_service.SaveImage(filename, objectName, fileHeader.Size, hash)
 	if err != nil {
-		response.FailWithError(fmt.Errorf("上传到 MinIO 失败: %v", err), c)
-		return
-	}
-
-	// 入库
-	model = models.ImageModel{
-		Filename: filename,
-		Path:     objectName,
-		Size:     fileHeader.Size,
-		Hash:     hash,
-	}
-	err = global.DB.Create(&model).Error
-	if err != nil { // 入库失败,清理 MinIO 对象
-		// 清理 MinIO 对象
-		global.StorageClient.RemoveObject(ctx, global.Config.ObjectStorage.Bucket, objectName, minio.RemoveObjectOptions{})
+		_ = media_service.Remove(context.Background(), objectName)
 		response.FailWithError(err, c)
 		return
 	}
-	response.Ok(model.ID, "图片上传成功", c)
+	response.Ok(id, "图片上传成功", c)
 }
 
-// GetImage 查询图片
-// 参数: c - gin上下文
-// 说明: 根据ID查询图片并返回对象存储中的文件内容
+// GetImage 查询图片(从 media 服务读取)。
 func (OSSImgApi) GetImage(c *gin.Context) {
 	id := c.Query("id")
 
-	var img models.ImageModel
-	// 查询图片是否存在
-	if global.DB.Take(&img, "id = ?", id).Error != nil {
+	var imgID uint
+	if _, err := fmt.Sscanf(id, "%d", &imgID); err != nil {
 		response.FailWithMsg("图片已被删除", c)
 		return
 	}
-
-	// 从对象存储读取图片
-	obj, err := global.StorageClient.GetObject(
-		context.Background(),
-		global.Config.ObjectStorage.Bucket,
-		img.Path,
-		minio.GetObjectOptions{},
-	)
-	if err != nil {
-		response.FailWithError(fmt.Errorf("读取图片失败: %v", err), c)
-		return
-	}
-	defer obj.Close()
-
-	stat, err := obj.Stat()
+	meta, err := media_service.GetImageMeta(imgID)
 	if err != nil {
 		response.FailWithMsg("图片已被删除", c)
 		return
 	}
 
-	contentType := stat.ContentType
+	data, err := media_service.GetBytes(context.Background(), meta.Path)
+	if err != nil {
+		response.FailWithMsg("图片已被删除", c)
+		return
+	}
+
+	contentType := mime.TypeByExtension(path.Ext(meta.Path))
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	c.Header("Content-Type", contentType)
-	c.Header("Content-Length", fmt.Sprintf("%d", stat.Size))
-	c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, img.Filename))
-	if _, err = io.Copy(c.Writer, obj); err != nil {
-		logrus.Errorf("返回图片失败:%v", err)
-	}
+	c.Header("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, meta.Filename))
+	c.Data(http.StatusOK, contentType, data)
 }
 
 // ImageList 管理员查询图片列表
-// 参数: c - gin上下文
-// 说明: 分页查询图片列表,支持文件名模糊搜索
 func (OSSImgApi) ImageList(c *gin.Context) {
 	var req common.PageInfo
 	if err := c.ShouldBind(&req); err != nil {
@@ -172,19 +128,12 @@ func (OSSImgApi) ImageList(c *gin.Context) {
 		return
 	}
 
-	// 查询图片列表
-	_list, count, capped, err := common.ListQuery[models.ImageModel](models.ImageModel{}, common.Options{
-		PageInfo:      req,
-		Likes:         []string{"filename"},
-		AllowedOrders: []string{"id", "created_at", "size"},
-		CountCap:      common.DefaultCountCap, //总数封顶
-	})
+	_list, count, capped, err := media_service.ListImages(req.Page, req.Limit, req.Key, req.Order, req.EndId)
 	if err != nil {
 		response.FailWithMsg("查询失败", c)
 		return
 	}
 
-	// 构建响应数据
 	var list = make([]ImageListResponse, 0)
 	for _, model := range _list {
 		list = append(list, ImageListResponse{
@@ -196,8 +145,6 @@ func (OSSImgApi) ImageList(c *gin.Context) {
 }
 
 // ImageRemoveView 管理员批量删除图片
-// 参数: c - gin上下文
-// 说明: 根据ID列表删除对象存储文件并删除数据库记录
 func (OSSImgApi) ImageRemoveView(c *gin.Context) {
 	var req RemoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -205,12 +152,10 @@ func (OSSImgApi) ImageRemoveView(c *gin.Context) {
 		return
 	}
 
-	// 记录操作日志
 	log := log_service.GetLog(c)
 	log.ShowRequest()
 	log.ShowResponse()
 
-	// 限制单次删除数量,避免一次请求删除过多对象
 	if len(req.IDlist) == 0 {
 		response.OkWithMsg("图片删除成功,共删除0张", c)
 		return
@@ -220,40 +165,16 @@ func (OSSImgApi) ImageRemoveView(c *gin.Context) {
 		return
 	}
 
-	// 查询要删除的图片
-	var list []models.ImageModel
-	global.DB.Find(&list, "id IN ?", req.IDlist)
-	if len(list) == 0 {
-		response.OkWithMsg("图片删除成功,共删除0张", c)
+	deleted, failed, err := media_service.RemoveImages(req.IDlist)
+	if err != nil {
+		logrus.Errorf("删除图片失败:%s", err)
+		response.FailWithMsg("删除失败", c)
 		return
-	}
-
-	// 先删除对象存储文件,全部成功后再删除数据库记录,避免记录被删而对象残留成孤儿文件
-	ctx := context.Background()
-	failed := 0
-	for _, model := range list {
-		err := global.StorageClient.RemoveObject(
-			ctx,
-			global.Config.ObjectStorage.Bucket,
-			model.Path,
-			minio.RemoveObjectOptions{},
-		)
-		if err != nil {
-			failed++
-			logrus.Errorf("删除对象失败:%s", err)
-		}
 	}
 	if failed > 0 {
 		response.FailWithMsg(fmt.Sprintf("有%d张图片删除失败,请重试", failed), c)
 		return
 	}
 
-	// 删除数据库记录
-	if err := global.DB.Delete(&list).Error; err != nil {
-		logrus.Errorf("删除数据库记录失败:%s", err)
-		response.FailWithMsg("删除失败", c)
-		return
-	}
-
-	response.OkWithMsg(fmt.Sprintf("图片删除成功,共删除%d张", len(list)), c)
+	response.OkWithMsg(fmt.Sprintf("图片删除成功,共删除%d张", deleted), c)
 }

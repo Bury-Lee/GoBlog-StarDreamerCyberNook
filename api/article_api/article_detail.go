@@ -5,6 +5,7 @@ import (
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/content_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"context"
 	"encoding/json"
@@ -70,9 +71,9 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 	// 登录用户，能看到自己的所有文章
 	// 管理员，能看到全部的文章
 
-	var article models.ArticleModel
-	err := global.DB.Preload("UserModel").Preload("CategoryModel").Preload("ArticleAddition").Take(&article, req.ID).Error
-	if err != nil {
+	// 经 content 服务读取详情(内容域已拆分)
+	detail, derr := content_service.GetArticle(req.ID)
+	if derr != nil {
 		//写入短时负缓存,防止被不存在的ID刷库
 		global.RedisHotPool.Set(ctx, "ArticleID"+idStr, articleNotFoundCache, time.Minute)
 		response.FailWithMsg("文章不存在", c)
@@ -81,23 +82,19 @@ func (ArticleApi) ArticleDetailView(c *gin.Context) {
 
 	//权限检查:仅管理员或作者可见未发布文章
 	claims, _ := jwts.ParseTokenByGin(c)
-	isAdminOrOwner := claims != nil && (claims.Role == enum.AdminRole || claims.UserID == article.UserID)
-	if !isAdminOrOwner && article.Status != models.StatusPublished {
+	isAdminOrOwner := claims != nil && (claims.Role == enum.AdminRole || claims.UserID == detail.ArticleModel.UserID)
+	if !isAdminOrOwner && detail.ArticleModel.Status != models.StatusPublished {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
 
-	var categoryTitle *string
-	if article.CategoryModel != nil {
-		categoryTitle = &article.CategoryModel.Title
-	}
 	//AI点评通过外键预加载,直接随文章一起返回
 	cached := ArticleDetailResponse{
-		ArticleModel:  article,
-		CategoryTitle: categoryTitle,
-		UserName:      article.UserModel.UserName,
-		NickName:      article.UserModel.NickName,
-		UserAvatar:    article.UserModel.Avatar,
+		ArticleModel:  detail.ArticleModel,
+		CategoryTitle: detail.CategoryTitle,
+		UserName:      detail.UserName,
+		NickName:      detail.NickName,
+		UserAvatar:    detail.UserAvatar,
 	}
 
 	// 计数只在响应阶段叠加,不写回详情缓存

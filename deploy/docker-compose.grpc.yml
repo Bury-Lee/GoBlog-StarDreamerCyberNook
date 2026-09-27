@@ -1,0 +1,108 @@
+# gRPC 服务编排基线(独立进程部署形态)。
+# 也可用统一宿主单进程跑全栈:`main -f setting.yaml`(components 决定启用项)。
+# 用法:
+#   docker compose -f deploy/docker-compose.grpc.yml build
+#   docker compose -f deploy/docker-compose.grpc.yml up ai search notify media auth content user message
+name: blog-grpc
+
+x-svc-build: &svc-build
+  context: ..
+  dockerfile: deploy/Dockerfile
+
+services:
+  # AI 微服务(模型调用)。配置以文件为主;密钥可经环境变量覆盖。
+  ai:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/ai/cmd }
+    command: ["-config", "services/ai/ai.yaml"]
+    environment:
+      AI_API_KEY: "${AI_API_KEY:-}"
+      AI_MODEL: "${AI_MODEL:-}"
+    expose: ["9210"]
+
+  # 检索微服务(Elasticsearch)。
+  search:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/search/cmd }
+    command: ["-config", "services/search/search.yaml"]
+    environment:
+      ES_URL: "${ES_URL:-}"
+      ES_PASSWORD: "${ES_PASSWORD:-}"
+    expose: ["9220"]
+
+  # 通知微服务(邮件/SMTP)。授权码经环境变量注入。
+  notify:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/notify/cmd }
+    command: ["-config", "services/notify/notify.yaml"]
+    environment:
+      EMAIL_AUTHCODE: "${EMAIL_AUTHCODE:-}"
+    expose: ["9230"]
+
+  # 媒体微服务(二进制存取 / 图片元数据:local / minio)。
+  media:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/media/cmd }
+    command: ["-config", "services/media/media.yaml"]
+    environment:
+      MEDIA_MINIO_SECRET_KEY: "${MEDIA_MINIO_SECRET_KEY:-}"
+    expose: ["9240"]
+
+  # 鉴权微服务(集中签发 JWT;本地校验仍在各服务)。
+  auth:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/auth/cmd }
+    command: ["-config", "services/auth/auth.yaml"]
+    environment:
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:-}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:-}"
+    expose: ["9250"]
+
+  # 内容微服务(文章/评论/动态/收藏;同库,DSN 经环境变量注入)。
+  content:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/content/cmd }
+    command: ["-config", "services/content/content.yaml"]
+    environment:
+      CONTENT_DB_DRIVER: "${CONTENT_DB_DRIVER:-mysql}"
+      CONTENT_DB_DSN: "${CONTENT_DB_DSN:-}"
+    expose: ["9260"]
+
+  # 用户微服务(用户/关注/资料;同库)。
+  user:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/user/cmd }
+    command: ["-config", "services/user/user.yaml"]
+    environment:
+      USER_DB_DRIVER: "${USER_DB_DRIVER:-mysql}"
+      USER_DB_DSN: "${USER_DB_DSN:-}"
+    expose: ["9270"]
+
+  # 站内信微服务(读接口 + 通知;同库)。
+  message:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/message/cmd }
+    command: ["-config", "services/message/message.yaml"]
+    environment:
+      MESSAGE_DB_DRIVER: "${MESSAGE_DB_DRIVER:-mysql}"
+      MESSAGE_DB_DSN: "${MESSAGE_DB_DSN:-}"
+    expose: ["9280"]
+
+  # 社区微服务(反馈/轮播/友链;同库)。
+  community:
+    build:
+      <<: *svc-build
+      args: { TARGET: ./services/community/cmd }
+    command: ["-config", "services/community/community.yaml"]
+    environment:
+      COMMUNITY_DB_DRIVER: "${COMMUNITY_DB_DRIVER:-mysql}"
+      COMMUNITY_DB_DSN: "${COMMUNITY_DB_DSN:-}"
+    expose: ["9290"]

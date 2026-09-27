@@ -41,6 +41,24 @@ set GOARCH=amd64
 go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\main_macos_amd64" .
 if errorlevel 1 goto :error
 
+echo ==^> build host windows/amd64
+set GOOS=windows
+set GOARCH=amd64
+go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\host_windows_amd64.exe" ./cmd/host
+if errorlevel 1 goto :error
+
+echo ==^> build host linux/amd64
+set GOOS=linux
+set GOARCH=amd64
+go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\host_linux_amd64" ./cmd/host
+if errorlevel 1 goto :error
+
+echo ==^> build host darwin/amd64
+set GOOS=darwin
+set GOARCH=amd64
+go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\host_macos_amd64" ./cmd/host
+if errorlevel 1 goto :error
+
 if "%BUILD_ARM64%"=="1" (
     echo ==^> build linux/arm64
     set GOOS=linux
@@ -53,9 +71,25 @@ if "%BUILD_ARM64%"=="1" (
     set GOARCH=arm64
     go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\main_macos_arm64" .
     if errorlevel 1 goto :error
+
+    echo ==^> build host linux/arm64
+    set GOOS=linux
+    set GOARCH=arm64
+    go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\host_linux_arm64" ./cmd/host
+    if errorlevel 1 goto :error
+
+    echo ==^> build host darwin/arm64
+    set GOOS=darwin
+    set GOARCH=arm64
+    go build -ldflags="%LDFLAGS%" -trimpath -o "%OUT_DIR%\host_macos_arm64" ./cmd/host
+    if errorlevel 1 goto :error
 )
 
 popd
+
+rem copy configs/resources regardless of frontend
+if not exist "%OUT_DIR%\init" mkdir "%OUT_DIR%\init"
+copy /y "%ROOT_DIR%\init\ip2region.xdb" "%OUT_DIR%\init\ip2region.xdb" >nul
 
 if "%SKIP_FRONTEND%"=="1" goto :skip_frontend
 
@@ -71,9 +105,6 @@ if exist "%OUT_DIR%\static\index.html" del /q "%OUT_DIR%\static\index.html"
 if exist "%OUT_DIR%\static\favicon.svg" del /q "%OUT_DIR%\static\favicon.svg"
 if not exist "%OUT_DIR%\static" mkdir "%OUT_DIR%\static"
 xcopy "%ROOT_DIR%\frontend\dist" "%OUT_DIR%\static" /e /i /y >nul
-
-if not exist "%OUT_DIR%\init" mkdir "%OUT_DIR%\init"
-copy /y "%ROOT_DIR%\init\ip2region.xdb" "%OUT_DIR%\init\ip2region.xdb" >nul
 
 :skip_frontend
 echo.

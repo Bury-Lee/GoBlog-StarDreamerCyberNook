@@ -3,8 +3,7 @@ package user_api
 import (
 	"StarDreamerCyberNook/common"
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/user_service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -29,17 +28,8 @@ func (UserApi) UserListView(c *gin.Context) {
 		response.FailWithMsg("参数错误", c)
 		return
 	}
-	var options common.Options
-	options.PageInfo = req.PageInfo
-	options.Likes = []string{"nick_name"} //仅按昵称模糊匹配,不搜索简介
-	options.DefaultOrder = "id desc"
-	options.AllowedOrders = []string{"id", "created_at", "last_login_time", "age"}
-	options.CountCap = common.DefaultCountCap //总数封顶
-	if req.UserID != 0 {
-		//用户名精确匹配
-		options.Where = global.DB.Where("id = ?", req.UserID)
-	}
-	list, count, capped, err := common.ListQuery[models.UserModel](models.UserModel{}, options)
+
+	list, count, capped, err := user_service.ListUsers(req.UserID, req.Page, req.Limit, req.Order, req.Key, req.EndId)
 	if err != nil {
 		logrus.Errorf("查询用户列表失败 %s", err)
 		response.FailWithMsg("查询失败", c)

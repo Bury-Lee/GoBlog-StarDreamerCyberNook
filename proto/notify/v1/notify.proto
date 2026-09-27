@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package notify.v1;
+
+option go_package = "StarDreamerCyberNook/gen/notify/v1;notifyv1";
+
+// NotifyService 把邮件发送从博客剥离为独立微服务。
+// 服务端持有 SMTP 配置与站点标题;调用方只传收件人与内容。
+service NotifyService {
+  rpc SendEmail(SendEmailRequest) returns (SendEmailReply);
+  rpc SendRegister(SendCodeRequest) returns (SendEmailReply);
+  rpc SendForgetPwd(SendCodeRequest) returns (SendEmailReply);
+  rpc SendResetEmail(SendCodeRequest) returns (SendEmailReply);
+}
+
+message SendEmailRequest {
+  string to      = 1;
+  string subject = 2;
+  string html    = 3;
+}
+
+message SendCodeRequest {
+  string target = 1; // 收件邮箱
+  string code   = 2; // 验证码
+}
+
+message SendEmailReply {}

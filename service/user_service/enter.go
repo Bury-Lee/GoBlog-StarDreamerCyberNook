@@ -1,47 +1,171 @@
+// Package user_service 是经 gRPC 调用独立 user 服务的客户端(用户关系域:关注/粉丝/好友)。
 package user_service
 
 import (
-	// 核心工具包，包含IP地址解析等功能
-	"StarDreamerCyberNook/global" // 全局变量包，包含数据库连接等
-	"StarDreamerCyberNook/models" // 数据模型包，包含所有数据库表结构
-	"StarDreamerCyberNook/utils/ip"
+	"context"
+	"sync"
+	"time"
 
-	"github.com/gin-gonic/gin"   // Gin Web框架，用于处理HTTP请求
-	"github.com/sirupsen/logrus" // 日志库，用于记录程序运行日志
+	userv1 "StarDreamerCyberNook/gen/user/v1"
+	"StarDreamerCyberNook/global"
+	"StarDreamerCyberNook/pkg/grpcx"
+	"StarDreamerCyberNook/pkg/svc"
 )
 
-// UserService 用户服务结构体
-// 封装与用户相关的业务逻辑操作
-type UserService struct {
-	UserModel models.UserModel // 用户模型实例，包含用户基础信息
+const userTimeout = 10 * time.Second
+
+var (
+	cliOnce sync.Once
+	cli     userv1.UserServiceClient
+	cliErr  error
+)
+
+func client() (userv1.UserServiceClient, error) {
+	cliOnce.Do(func() {
+		var cfgs map[string][]string
+		if global.Config != nil {
+			cfgs = global.Config.Services
+		}
+		svc.Init(cfgs)
+		conn, err := grpcx.Dial("user")
+		if err != nil {
+			cliErr = err
+			return
+		}
+		cli = userv1.NewUserServiceClient(conn)
+	})
+	return cli, cliErr
 }
 
-// New 创建用户服务实例
-// 参数: User - 用户模型对象
-// 返回: *UserService - 用户服务实例指针
-func New(User models.UserModel) *UserService {
-	return &UserService{
-		UserModel: User,
-	}
+// FollowItem 关注条目展示信息。
+type FollowItem struct {
+	FocusUserID uint
+	Nickname    string
+	Avatar      string
+	Abstract    string
+	CreatedAt   time.Time
 }
 
-// UserLogin 记录用户登录信息
-// 获取用户登录时的IP地址、地理位置、设备信息并保存到数据库
-// 参数: c - Gin上下文对象，包含请求相关信息
-func (this *UserService) UserLogin(c *gin.Context) {
-	// 获取客户端IP地址
-	ipAdd := c.ClientIP()
-	// 根据IP地址获取地理位置信息
-	addr := ip.GetIpAddr(ipAdd)
-	// 创建用户登录记录并保存到数据库
-	err := global.DB.Create(&models.UserLoginModel{
-		UserID:    this.UserModel.ID,         // 当前登录用户的ID
-		IP:        ipAdd,                     // 客户端IP地址
-		Addr:      addr,                      // IP对应的地理位置
-		UserAgent: c.GetHeader("User-Agent"), // 用户代理信息（浏览器/设备信息）
-	}).Error
+// FollowRecord 原始关注记录(粉丝列表)。
+type FollowRecord struct {
+	ID          uint
+	UserID      uint
+	FocusUserID uint
+	Friend      bool
+	CreatedAt   time.Time
+}
+
+// Follow 关注用户;already 表示此前已关注。
+func Follow(userID, focusUserID uint) (bool, error) {
+	c, err := client()
 	if err != nil {
-		// 记录数据库写入失败错误日志
-		logrus.Errorf("写入失败:%v", err)
+		return false, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	rep, err := c.Follow(ctx, &userv1.FollowRequest{UserId: uint64(userID), FocusUserId: uint64(focusUserID)})
+	if err != nil {
+		return false, err
+	}
+	return rep.GetAlready(), nil
+}
+
+// Unfollow 取关用户。
+func Unfollow(userID, focusUserID uint) error {
+	c, err := client()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	_, err = c.Unfollow(ctx, &userv1.FollowRequest{UserId: uint64(userID), FocusUserId: uint64(focusUserID)})
+	return err
+}
+
+// FollowCheck 是否已关注。
+func FollowCheck(userID, focusUserID uint) (bool, error) {
+	c, err := client()
+	if err != nil {
+		return false, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	rep, err := c.FollowCheck(ctx, &userv1.CheckRequest{UserId: uint64(userID), FocusUserId: uint64(focusUserID)})
+	if err != nil {
+		return false, err
+	}
+	return rep.GetFollowed(), nil
+}
+
+func listReq(userID, viewerID uint, logged bool, page, limit int, order string, endID uint) *userv1.ListRequest {
+	return &userv1.ListRequest{
+		UserId: uint64(userID), ViewerId: uint64(viewerID), ViewerLogged: logged,
+		Page: int32(page), Limit: int32(limit), Order: order, EndId: uint64(endID),
+	}
+}
+
+func itemsOf(rep *userv1.FollowItemListReply) []FollowItem {
+	out := make([]FollowItem, 0, len(rep.GetList()))
+	for _, it := range rep.GetList() {
+		out = append(out, FollowItem{
+			FocusUserID: uint(it.GetFocusUserId()),
+			Nickname:    it.GetNickname(),
+			Avatar:      it.GetAvatar(),
+			Abstract:    it.GetAbstract(),
+			CreatedAt:   time.UnixMilli(it.GetCreatedAt()),
+		})
+	}
+	return out
+}
+
+// FollowingList 关注列表。
+func FollowingList(userID, viewerID uint, logged bool, page, limit int, order string, endID uint) ([]FollowItem, int, bool, error) {
+	c, err := client()
+	if err != nil {
+		return nil, 0, false, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	rep, err := c.FollowingList(ctx, listReq(userID, viewerID, logged, page, limit, order, endID))
+	if err != nil {
+		return nil, 0, false, err
+	}
+	return itemsOf(rep), int(rep.GetCount()), rep.GetCapped(), nil
+}
+
+// FollowerList 粉丝列表。
+func FollowerList(userID, viewerID uint, logged bool, page, limit int, order string, endID uint) ([]FollowRecord, int, bool, error) {
+	c, err := client()
+	if err != nil {
+		return nil, 0, false, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	rep, err := c.FollowerList(ctx, listReq(userID, viewerID, logged, page, limit, order, endID))
+	if err != nil {
+		return nil, 0, false, err
+	}
+	out := make([]FollowRecord, 0, len(rep.GetList()))
+	for _, r := range rep.GetList() {
+		out = append(out, FollowRecord{
+			ID: uint(r.GetId()), UserID: uint(r.GetUserId()), FocusUserID: uint(r.GetFocusUserId()),
+			Friend: r.GetFriend(), CreatedAt: time.UnixMilli(r.GetCreatedAt()),
+		})
+	}
+	return out, int(rep.GetCount()), rep.GetCapped(), nil
+}
+
+// FriendList 好友列表。
+func FriendList(userID, viewerID uint, logged bool, page, limit int, order string, endID uint) ([]FollowItem, int, bool, error) {
+	c, err := client()
+	if err != nil {
+		return nil, 0, false, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), userTimeout)
+	defer cancel()
+	rep, err := c.FriendList(ctx, listReq(userID, viewerID, logged, page, limit, order, endID))
+	if err != nil {
+		return nil, 0, false, err
+	}
+	return itemsOf(rep), int(rep.GetCount()), rep.GetCapped(), nil
 }

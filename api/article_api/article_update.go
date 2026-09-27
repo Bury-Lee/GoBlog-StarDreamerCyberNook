@@ -1,16 +1,18 @@
 package article_api
 
 import (
+	"context"
+	"fmt"
+	"strconv"
+
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
 	"StarDreamerCyberNook/service/ai_service"
+	"StarDreamerCyberNook/service/content_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
-	"context"
-	"fmt"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -19,7 +21,7 @@ import (
 type ArticleUpdateRequest struct {
 	ID          uint     `json:"id" binding:"required"`
 	Title       string   `json:"title" binding:"required"`
-	Abstract    string   `json:"abstract"` //要考虑一个问题,如果用户想设置为空简介,那么就设为"该文章未设置简介"
+	Abstract    string   `json:"abstract"`
 	Content     string   `json:"content" binding:"required"`
 	CategoryID  *uint    `json:"categoryID"`
 	TagList     []string `json:"tagList"`
@@ -27,6 +29,7 @@ type ArticleUpdateRequest struct {
 	OpenComment bool     `json:"openComment"`
 }
 
+// ArticleUpdateView 整体更新文章(经 content 服务落库)。
 func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 	var req ArticleUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,76 +43,51 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 		return
 	}
 
-	var article models.ArticleModel
-	err = global.DB.Take(&article, req.ID).Error
+	detail, err := content_service.GetArticle(req.ID)
 	if err != nil {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
-
-	// 更新的文章必须是自己的
+	article := detail.ArticleModel
 	if article.UserID != user.ID {
 		response.FailWithMsg("只能更新自己的文章", c)
 		return
 	}
 
-	// 判断分类id是不是自己创建的
-	var category models.CategoryModel
-	if req.CategoryID != nil && *req.CategoryID != 0 {
-		err = global.DB.Take(&category, "id = ? and user_id = ?", *req.CategoryID, user.ID).Error
-		if err != nil {
-			response.FailWithMsg("文章分类不存在", c)
-			return
-		}
-	}
-
-	// 文章标题/正文防xss注入
+	// 防xss注入
 	xssFilter := xss_filter.NewXSSFilter()
 	req.Title = xss_filter.SanitizeText(req.Title)
 	if req.Content == "" {
 		response.FailWithMsg("正文解析错误", c)
 		return
-	} else {
-		req.Content = xssFilter.Sanitize(req.Content)
 	}
-	//不传简介时就设为无,传了就做清洗
+	req.Content = xssFilter.Sanitize(req.Content)
 	if req.Abstract != "" {
 		req.Abstract = xssFilter.Sanitize(req.Abstract)
 	} else {
 		req.Abstract = "该文章未设置简介"
 	}
 
-	//注意:tag_list是JSON序列化字段,不能放进map更新(会绕过序列化写入非法JSON),单独用结构体更新
-	mps := map[string]any{
-		"title":        req.Title,
-		"abstract":     req.Abstract,
-		"content":      req.Content,
-		"cover":        req.Cover,
-		"open_comment": req.OpenComment,
-	}
-	if req.CategoryID == nil || *req.CategoryID == 0 {
-		mps["category_id"] = nil
-	} else {
-		mps["category_id"] = *req.CategoryID
-	}
+	// 状态:发布中且开启审核时,编辑后回到待审核
+	status := article.Status
 	if article.Status == models.StatusPublished && global.Config.Site.Article.EnableExamination {
-		// 开启审核时,已发布的文章编辑后需要重新审核
-		mps["status"] = models.StatusPending
+		status = models.StatusPending
 	}
 
-	//内容变更且AI审核通过时重新生成的AI点评(写入文章扩展附录表)
 	var aiQuality, aiAbstract string
-
-	if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination { //启用ai审核(与创建逻辑一致,关闭审核时不改状态)
-		res, err := ai_service.CreateSingleReply("文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content, global.SystemPromptArticleReview.String())
-		if err != nil {
-			logrus.Error("ai审核失败", err.Error())
+	if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination {
+		res, e := ai_service.CreateSingleReply(
+			"文章标题:"+req.Title+"\n文章摘要:"+req.Abstract+"\n文章内容:"+req.Content,
+			global.SystemPromptArticleReview.String(),
+		)
+		if e != nil {
+			logrus.Error("ai审核失败", e.Error())
 			response.FailWithMsg("ai审核失败,已经自动改为为待审核状态", c)
+			return
 		}
-		switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
+		switch res {
 		case "通过":
-			mps["status"] = models.StatusPublished
-			//内容变更后重新生成AI点评,写入扩展附录表
+			status = models.StatusPublished
 			if q, e := ai_service.GenerateArticleQuality(req.Title, req.Abstract, req.Content); e != nil {
 				logrus.Errorf("ai自动创建评级失败: %s", e.Error())
 			} else {
@@ -120,85 +98,59 @@ func (ArticleApi) ArticleUpdateView(c *gin.Context) {
 			} else {
 				aiAbstract = a
 			}
-
 		case "拒绝":
-			mps["status"] = models.StatusDraft
+			status = models.StatusDraft
 		default:
 			logrus.Errorf("ai审核出错,回复内容:%s,文章详情:%s\n已自动换为待审核状态", res, fmt.Sprintf("%#v", req))
-			mps["status"] = models.StatusPending
+			status = models.StatusPending
 		}
 	}
 
-	err = global.DB.Model(&article).Updates(mps).Error
-	if err != nil {
+	// 分类:空/0 表示清空
+	var catPtr *uint
+	if req.CategoryID == nil || *req.CategoryID == 0 {
+		z := uint(0)
+		catPtr = &z
+	} else {
+		catPtr = req.CategoryID
+	}
+
+	if err := content_service.UpdateArticle(content_service.UpdateReq{
+		ID:          req.ID,
+		OwnerID:     user.ID,
+		Title:       &req.Title,
+		Abstract:    &req.Abstract,
+		Content:     &req.Content,
+		Cover:       &req.Cover,
+		OpenComment: &req.OpenComment,
+		CategoryID:  catPtr,
+		Status:      &status,
+		TagList:     &req.TagList,
+		AIQuality:   aiQuality,
+		AIAbstract:  aiAbstract,
+		AIModel:     global.Config.AI.Model,
+	}); err != nil {
 		response.FailWithMsg("更新失败", c)
 		return
 	}
 
-	//重新生成AI点评时以 article_id 为键 upsert 到扩展附录表
-	if aiQuality != "" || aiAbstract != "" {
-		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
-			Assign(map[string]any{
-				"ai_quality":  aiQuality,
-				"ai_abstract": aiAbstract,
-				"ai_model":    global.Config.AI.Model,
-			}).
-			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
-			logrus.Errorf("更新AI点评失败,文章 %d: %s", article.ID, e.Error())
-		}
-	}
-
-	//tag_list走结构体更新,保证serializer:json生效
-	if err = global.DB.Model(&article).Select("tag_list").Updates(models.ArticleModel{TagList: req.TagList}).Error; err != nil {
-		response.FailWithMsg("标签更新失败", c)
-		return
-	}
-
-	//查询Redis是否存在该文章缓存
-
-	//redis中存在就更新的策略
-	// idStr := strconv.FormatUint(uint64(article.ID), 10)
-	// _, err = global.RedisHotPool.Get("ArticleID" + idStr).Result()
-	// if err == nil {
-	// 	articleJSON, err := json.Marshal(&article)
-	// 	if err != nil {
-	// 		logrus.Error("文章创建失败,缓存数据解析错误: " + err.Error())
-	// 		return
-	// 	}
-	// 	global.RedisHotPool.Set("ArticleID"+idStr, articleJSON, 0)
-	// }
-
-	//redis中存在就删除的策略
-	idStr := strconv.FormatUint(uint64(article.ID), 10)
-	ctx := context.Background()
-	global.RedisHotPool.Del(ctx, "ArticleID"+idStr)
-
-	//Updates(map)不会回写结构体,状态提示要用本次实际写入的值
-	newStatus := article.Status
-	if v, ok := mps["status"]; ok {
-		if s, ok2 := v.(models.Status); ok2 {
-			newStatus = s
-		}
-	}
-	response.OkWithMsg("文章更新成功,当前状态为:"+newStatus.String(), c)
+	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(req.ID), 10))
+	response.OkWithMsg("文章更新成功,当前状态为:"+status.String(), c)
 }
 
 type ArticleUpdateRequest2 struct {
 	ID          uint           `json:"id" binding:"required"`
 	Title       *string        `json:"title"`
-	Abstract    *string        `json:"abstract"` //要考虑一个问题,如果用户想设置为空简介,那么就设为"该文章未设置简介"
+	Abstract    *string        `json:"abstract"`
 	Content     *string        `json:"content"`
 	CategoryID  *uint          `json:"categoryID"`
 	TagList     *[]string      `json:"tagList"`
 	Cover       *string        `json:"cover"`
 	OpenComment *bool          `json:"openComment"`
-	Status      *models.Status `json:"status"` //显式修改状态:存草稿(0)或提交审核(1)
+	Status      *models.Status `json:"status"`
 }
 
-// ArticleUpdateView2 增量更新文章
-// 参数:c - gin.Context
-// 返回:无
-// 说明:支持部分字段更新，空指针字段将被忽略
+// ArticleUpdateView2 增量更新文章(经 content 服务落库)。
 func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 	var req ArticleUpdateRequest2
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -212,106 +164,98 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 		return
 	}
 
-	var article models.ArticleModel
-	err = global.DB.Take(&article, req.ID).Error
+	detail, err := content_service.GetArticle(req.ID)
 	if err != nil {
 		response.FailWithMsg("文章不存在", c)
 		return
 	}
-
-	// 更新的文章必须是自己的
+	article := detail.ArticleModel
 	if article.UserID != user.ID {
 		response.FailWithMsg("只能更新自己的文章", c)
 		return
 	}
 
-	mps := map[string]any{}
+	upd := content_service.UpdateReq{ID: req.ID, OwnerID: user.ID}
+	finalStatus := article.Status
+	changed := false
 
 	if req.Title != nil {
-		mps["title"] = *req.Title
+		upd.Title = req.Title
+		changed = true
 	}
-
-	// 判断分类id是不是自己创建的
-	var category models.CategoryModel
 	if req.CategoryID != nil {
-		if *req.CategoryID != 0 {
-			err = global.DB.Take(&category, "id = ? and user_id = ?", *req.CategoryID, user.ID).Error
-			if err != nil {
-				response.FailWithMsg("文章分类不存在", c)
-				return
-			}
-			mps["category_id"] = *req.CategoryID
-		} else {
-			mps["category_id"] = nil
-		}
+		upd.CategoryID = req.CategoryID // 0 表示清空
+		changed = true
 	}
-
 	xssFilter := xss_filter.NewXSSFilter()
-
-	// 文章正文防xss注入
 	if req.Content != nil {
 		if *req.Content == "" {
 			response.FailWithMsg("正文解析错误", c)
 			return
 		}
-		mps["content"] = xssFilter.Sanitize(*req.Content)
+		v := xssFilter.Sanitize(*req.Content)
+		upd.Content = &v
+		changed = true
 	}
-
-	//不传简介时就设为无,传了就做清洗
 	if req.Abstract != nil {
+		v := "该文章未设置简介"
 		if *req.Abstract != "" {
-			mps["abstract"] = xssFilter.Sanitize(*req.Abstract)
-		} else {
-			mps["abstract"] = "该文章未设置简介"
+			v = xssFilter.Sanitize(*req.Abstract)
 		}
+		upd.Abstract = &v
+		changed = true
 	}
-
 	if req.Cover != nil {
-		mps["cover"] = *req.Cover
+		upd.Cover = req.Cover
+		changed = true
 	}
 	if req.OpenComment != nil {
-		mps["open_comment"] = *req.OpenComment
+		upd.OpenComment = req.OpenComment
+		changed = true
+	}
+	if req.TagList != nil {
+		upd.TagList = req.TagList
+		changed = true
 	}
 
-	if len(mps) == 0 {
+	if !changed {
 		response.OkWithMsg("未做任何修改", c)
 		return
 	}
 
 	contentChanged := req.Title != nil || req.Abstract != nil || req.Content != nil
 
-	//内容变更且AI审核通过时重新生成的AI点评(写入文章扩展附录表)
 	var aiQuality, aiAbstract string
-
 	if contentChanged {
 		if article.Status == models.StatusPublished && global.Config.Site.Article.EnableExamination {
-			// 开启审核时,已发布的文章编辑后需要重新审核
-			mps["status"] = models.StatusPending
+			finalStatus = models.StatusPending
 		}
-
-		if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination { //启用ai审核(与创建逻辑一致,关闭审核时不改状态)
+		if global.Config.AI.Enable && global.Config.Site.Article.EnableExamination {
 			titleForAI := article.Title
 			if req.Title != nil {
 				titleForAI = *req.Title
 			}
 			abstractForAI := article.Abstract
-			if req.Abstract != nil {
-				abstractForAI = mps["abstract"].(string)
+			if upd.Abstract != nil {
+				abstractForAI = *upd.Abstract
 			}
 			contentForAI := article.Content
-			if req.Content != nil {
-				contentForAI = mps["content"].(string)
+			if upd.Content != nil {
+				contentForAI = *upd.Content
 			}
 
-			res, err := ai_service.CreateSingleReply("文章标题:"+titleForAI+"\n文章摘要:"+abstractForAI+"\n文章内容:"+contentForAI, global.SystemPromptArticleReview.String())
-			if err != nil {
-				logrus.Error("ai审核失败", err.Error())
+			res, e := ai_service.CreateSingleReply(
+				"文章标题:"+titleForAI+"\n文章摘要:"+abstractForAI+"\n文章内容:"+contentForAI,
+				global.SystemPromptArticleReview.String(),
+			)
+			if e != nil {
+				logrus.Error("ai审核失败", e.Error())
 				response.FailWithMsg("ai审核失败,已经自动改为为待审核状态", c)
+				return
 			}
-			switch res { //TODO:这里无论成功还是失败都应该插入消息,告知原因
+			switch res {
 			case "通过":
-				mps["status"] = models.StatusPublished
-				//内容变更后重新生成AI点评,写入扩展附录表
+				finalStatus = models.StatusPublished
 				if q, e := ai_service.GenerateArticleQuality(titleForAI, abstractForAI, contentForAI); e != nil {
 					logrus.Errorf("ai自动创建评级失败: %s", e.Error())
 				} else {
@@ -322,18 +266,16 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 				} else {
 					aiAbstract = a
 				}
-
 			case "拒绝":
-				mps["status"] = models.StatusDraft
+				finalStatus = models.StatusDraft
 			default:
 				logrus.Errorf("ai审核出错,回复内容:%s,文章详情:%s\n已自动换为待审核状态", res, fmt.Sprintf("%#v", req))
-				mps["status"] = models.StatusPending
+				finalStatus = models.StatusPending
 			}
 		}
 	}
 
-	//显式状态变更:普通用户只能存草稿或提交审核,管理员可以设置为任意合法状态
-	//放在AI审核之后,保证用户"存草稿/提交审核"的意图不会被AI结果覆盖
+	// 显式状态变更:普通用户仅草稿/审核中,管理员任意合法状态
 	if req.Status != nil {
 		st := *req.Status
 		if st < models.StatusDraft || st > models.StatusOffline {
@@ -349,58 +291,18 @@ func (ArticleApi) ArticleUpdateView2(c *gin.Context) {
 				st = models.StatusPublished
 			}
 		}
-		mps["status"] = st
+		finalStatus = st
 	}
+	upd.Status = &finalStatus
+	upd.AIQuality = aiQuality
+	upd.AIAbstract = aiAbstract
+	upd.AIModel = global.Config.AI.Model
 
-	err = global.DB.Model(&article).Updates(mps).Error
-	if err != nil {
+	if err := content_service.UpdateArticle(upd); err != nil {
 		response.FailWithMsg("更新失败", c)
 		return
 	}
 
-	//重新生成AI点评时以 article_id 为键 upsert 到扩展附录表
-	if aiQuality != "" || aiAbstract != "" {
-		if e := global.DB.Where(models.ArticleAddition{ArticleID: article.ID}).
-			Assign(map[string]any{
-				"ai_quality":  aiQuality,
-				"ai_abstract": aiAbstract,
-				"ai_model":    global.Config.AI.Model,
-			}).
-			FirstOrCreate(&models.ArticleAddition{}).Error; e != nil {
-			logrus.Errorf("更新AI点评失败,文章 %d: %s", article.ID, e.Error())
-		}
-	}
-
-	//tag_list走结构体更新,保证serializer:json生效
-	if req.TagList != nil {
-		if err = global.DB.Model(&article).Select("tag_list").Updates(models.ArticleModel{TagList: *req.TagList}).Error; err != nil {
-			response.FailWithMsg("标签更新失败", c)
-			return
-		}
-	}
-
-	//查询Redis是否存在该文章缓存
-
-	//redis中存在就更新的策略
-	// idStr := strconv.FormatUint(uint64(article.ID), 10)
-	// _, err = global.RedisHotPool.Get("ArticleID" + idStr).Result()
-	// if err == nil {
-	// 	articleJSON, err := json.Marshal(&article)
-	// 	if err != nil {
-	// 		logrus.Error("文章创建失败,缓存数据解析错误: " + err.Error())
-	// 		return
-	// 	}
-	// 	global.RedisHotPool.Set("ArticleID"+idStr, articleJSON, 0)
-	// }
-
-	//redis中存在就删除的策略
-	idStr := strconv.FormatUint(uint64(article.ID), 10)
-	ctx := context.Background()
-	global.RedisHotPool.Del(ctx, "ArticleID"+idStr)
-
-	finalStatus := article.Status
-	if st, ok := mps["status"]; ok {
-		finalStatus = st.(models.Status)
-	}
+	global.RedisHotPool.Del(context.Background(), "ArticleID"+strconv.FormatUint(uint64(req.ID), 10))
 	response.OkWithMsg("文章更新成功,当前状态为:"+finalStatus.String(), c)
 }

@@ -5,16 +5,16 @@ import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/middleware"
-	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
 	"StarDreamerCyberNook/service/ai_service"
-	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
+	"StarDreamerCyberNook/service/user_service"
 	"StarDreamerCyberNook/utils"
+	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	Hash "StarDreamerCyberNook/utils/hash"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	utils_other "StarDreamerCyberNook/utils/other"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -89,53 +89,36 @@ func (UserApi) RegisterEmailView(c *gin.Context) {
 	// 7. 密码哈希加密
 	// 使用bcrypt等算法对密码进行单向哈希，确保数据库不存储明文密码
 	hashPwd, _ := Hash.HashPassword(req.Pwd)
-	// TODO: 理论上不会有错误,不过以防万一到时候检查一下
-	// TODO: 现在可能会有了,如果username已经存在就重新生成（需要处理用户名冲突）
 
 	// 8. 邮箱格式标准化
 	// 将邮箱转换为小写，确保邮箱唯一性判断不受大小写影响
 	info.RequstEmail = utils_other.ToLower(info.RequstEmail)
 
-	// 9. 构建用户模型
-	// 组装用户数据，准备写入数据库
-	var user = models.UserModel{
-		NickName:       "用户" + req.NickName, // 用户昵称（展示用）
-		UserName:       uname,               // 系统生成的唯一用户名
-		RegisterSource: enum.RegisterEmail,  // 注册来源：邮箱注册
-		Email:          info.RequstEmail,    // 用户邮箱（已转小写）
-		Role:           enum.UserRole,       // 默认角色：普通用户
-		Password:       hashPwd,             // 哈希后的密码
-		LastLoginTime:  time.Now(),
-	}
-
-	// 二次校验邮箱唯一性,防止验证码重放/并发导致重复注册
-	var existUser models.UserModel
-	if global.DB.Take(&existUser, "email = ?", info.RequstEmail).Error == nil {
-		response.FailWithMsg("该邮箱已注册", c)
-		return
-	}
-
-	// 10. 创建用户记录
-	// 将用户数据持久化到数据库
-	err := global.DB.Create(&user).Error
+	// 9. 建号(下沉 user 服务;服务内做邮箱唯一性二次校验,防验证码重放/并发重复注册)
+	userID, userName, role, err := user_service.CreateUserByEmail(
+		info.RequstEmail, "用户"+req.NickName, uname, hashPwd, enum.UserRole)
 	if err != nil {
-		response.FailWithMsg("注册失败,可能是邮箱已注册或其他错误", c) //TODO:应该是这样
-		logrus.Errorf("用户创建失败: %s", err)              // 记录详细错误日志供排查
+		if errors.Is(err, user_service.ErrEmailUsed) {
+			response.FailWithMsg("该邮箱已注册", c)
+			return
+		}
+		logrus.Errorf("用户创建失败: %s", err) // 记录详细错误日志供排查
+		response.FailWithMsg("注册失败,可能是邮箱已注册或其他错误", c)
 		return
 	}
 
 	// 11. 检查邮箱登录功能是否开启
 	// 如果后台关闭了邮箱登录，提示用户记住生成的用户名（用于账号密码登录）
 	if !global.Config.Site.Login.EmailLogin {
-		response.FailWithMsg(fmt.Sprintf("目前暂时不支持邮箱登录,您的用户名是:%s,请您牢记", uname), c)
+		response.FailWithMsg(fmt.Sprintf("目前暂时不支持邮箱登录,您的用户名是:%s,请您牢记", userName), c)
 	}
 
 	// 12. 生成JWT令牌
 	// 注册成功后自动登录，生成包含用户ID、用户名、角色的Token
 	AccessToken, RefreshToken, err := jwts.GetToken(jwts.Claims{
-		UserID:   user.ID,
-		Username: user.UserName,
-		Role:     user.Role,
+		UserID:   userID,
+		Username: userName,
+		Role:     role,
 	})
 	if err != nil {
 		response.FailWithMsg("登录失败", c)

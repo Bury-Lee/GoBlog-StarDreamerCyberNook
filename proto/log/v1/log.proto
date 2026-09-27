@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package log.v1;
+
+option go_package = "StarDreamerCyberNook/gen/log/v1;logv1";
+
+// LogService 拥有系统日志域(列表/已读/删除)。
+service LogService {
+  rpc ListLogs(ListLogsRequest) returns (LogListReply);
+  rpc ReadLog(ReadLogRequest) returns (Empty);
+  rpc RemoveLogs(RemoveLogsRequest) returns (RemoveLogsReply);
+}
+
+message Empty {}
+
+message Log {
+  uint64 id           = 1;
+  int32  log_type     = 2;
+  string title        = 3;
+  string content      = 4;
+  int32  level        = 5;
+  uint64 user_id      = 6;
+  string ip           = 7;
+  string addr         = 8;
+  bool   is_read      = 9;
+  bool   login_status = 10;
+  int32  login_type   = 11;
+  string service_name = 12;
+  int64  created_at   = 13;
+  int64  updated_at   = 14;
+  string nickname     = 15;
+  string avatar       = 16;
+}
+
+message ListLogsRequest {
+  int32          log_type     = 1;
+  int32          level        = 2;
+  string         ip           = 3;
+  optional bool  login_status = 4; // 指针:false 也要能作为筛选条件
+  string         service_name = 5;
+  uint64         user_id      = 6;
+  string         key          = 7;  // 标题模糊
+  int32          page         = 8;
+  int32          limit        = 9;
+  string         order        = 10;
+  uint64         end_id       = 11;
+  bool           with_user    = 12; // 预加载用户昵称/头像
+}
+message LogListReply {
+  repeated Log list   = 1;
+  int64        count  = 2;
+  bool         capped = 3;
+}
+
+message ReadLogRequest { uint64 id = 1; }
+message RemoveLogsRequest { repeated uint64 ids = 1; }
+message RemoveLogsReply { int32 deleted = 1; }

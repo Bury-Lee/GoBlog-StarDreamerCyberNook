@@ -2,8 +2,8 @@ package article_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/content_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 
 	"github.com/gin-gonic/gin"
@@ -29,24 +29,14 @@ func (ArticleApi) ArticleInteractionView(c *gin.Context) {
 		return
 	}
 
-	var diggCount int64
-	if err := global.DB.Model(&models.ArticleDiggModel{}).
-		Where("user_id = ? and article_id = ?", claims.UserID, req.ID).
-		Count(&diggCount).Error; err != nil {
-		response.FailWithMsg("查询点赞状态失败", c)
-		return
-	}
-
-	var collectCount int64
-	if err := global.DB.Model(&models.UserArticleCollectModel{}).
-		Where("user_id = ? and article_id = ?", claims.UserID, req.ID).
-		Count(&collectCount).Error; err != nil {
-		response.FailWithMsg("查询收藏状态失败", c)
+	digged, collected, err := content_service.GetArticleInteraction(claims.UserID, req.ID)
+	if err != nil {
+		response.FailWithMsg("查询互动状态失败", c)
 		return
 	}
 
 	response.OkWithData(ArticleInteractionResponse{
-		Digged:    diggCount > 0,
-		Collected: collectCount > 0,
+		Digged:    digged,
+		Collected: collected,
 	}, c)
 }

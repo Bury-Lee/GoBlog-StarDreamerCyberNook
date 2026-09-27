@@ -3,13 +3,13 @@ package user_api
 import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/user_service"
 	Hash "StarDreamerCyberNook/utils/hash"
 	"StarDreamerCyberNook/utils/ip"
 	jwts "StarDreamerCyberNook/utils/jwts"
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -40,61 +40,62 @@ func (UserApi) Login(c *gin.Context) { //用户名-密码登录
 		}
 	}
 
-	var usermodel models.UserModel
+	// 用户查询下沉到 user 服务;密码哈希校验在网关本地完成
+	var kind string
 	switch req.Type {
 	case "邮箱":
 		if !global.Config.Site.Login.EmailLogin {
 			response.FailWithMsg("邮箱登录未开放", c)
 			return
 		}
-		err := global.DB.Take(&usermodel, "email = ?", req.Val).Error
-		if err != nil {
-			response.FailWithMsg("邮箱密码错误", c)
-			return
-		}
+		kind = "email"
 	case "用户名":
 		if !global.Config.Site.Login.UsernamePassword {
 			response.FailWithMsg("账密登录未开放", c)
 			return
 		}
-		err := global.DB.Take(&usermodel, "user_name = ?", req.Val).Error
-		if err != nil {
-			response.FailWithMsg("用户密码错误", c)
-			return
-		}
+		kind = "user_name"
 	default:
 		response.FailWithMsg("请选择正确的登录方式", c)
 		return
 	}
-	if !Hash.CheckPassword(req.Pwd, usermodel.Password) {
+
+	user, err := user_service.GetUserByLogin(kind, req.Val)
+	if err != nil {
+		if errors.Is(err, user_service.ErrNotFound) {
+			if kind == "email" {
+				response.FailWithMsg("邮箱密码错误", c)
+			} else {
+				response.FailWithMsg("用户密码错误", c)
+			}
+			return
+		}
+		response.FailWithMsg("登录失败", c)
+		return
+	}
+	if !Hash.CheckPassword(req.Pwd, user.Password) {
 		response.FailWithMsg("用户名密码错误", c)
 		return
 	}
 	//封禁用户禁止登录
-	if usermodel.Role == enum.BlackRole {
+	if user.Role == enum.BlackRole {
 		response.FailWithMsg("账号已被封禁,无法登录", c)
 		return
 	}
 
-	// TODO:
-	// 	创建登录日志和修改最近登录时间
-	var loginLog = models.UserLoginModel{
-		UserID:    usermodel.ID,
-		IP:        c.ClientIP(),
-		UserAgent: c.Request.UserAgent(),
-	}
-	global.DB.Create(&loginLog)
+	// 创建登录日志并更新最近登录时间/IP(下沉 user 服务)
+	clientIP := c.ClientIP()
+	_ = user_service.RecordLogin(user.ID, clientIP, ip.GetIpAddr(clientIP), c.Request.UserAgent())
 
 	AccessToken, RefreshToken, err := jwts.GetToken(jwts.Claims{
-		UserID:   usermodel.ID,
-		Username: usermodel.UserName,
-		Role:     usermodel.Role,
+		UserID:   user.ID,
+		Username: user.UserName,
+		Role:     user.Role,
 	})
 	if err != nil {
 		response.FailWithMsg("登录失败", c)
 		return
 	}
-	global.DB.Model(&usermodel).Update("last_login_time", time.Now()).Update("ip", ip.GetIpAddr(c.ClientIP()))
 	// 13. 返回成功响应
 	// 将JWT令牌返回给前端，后续请求携带此Token进行身份验证
 	logrus.Info(fmt.Sprintf("用户 %s 登录", req.Val))

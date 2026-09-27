@@ -3,11 +3,12 @@ package user_api
 import (
 	"StarDreamerCyberNook/common/response"
 	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/service/ai_service"
+	"StarDreamerCyberNook/service/user_service"
 	xss_filter "StarDreamerCyberNook/utils/XSSfilter"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	utils_other "StarDreamerCyberNook/utils/other"
+	"encoding/json"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -88,60 +89,28 @@ func (UserApi) UserInfoUpdateView(c *gin.Context) {
 
 	userMap := utils_other.StructToMap(req, "s-u")
 	userConfMap := utils_other.StructToMap(req, "s-u-c")
-	// fmt.Println("userMap", userMap)
-	// fmt.Println("userConfMap", userConfMap)
 
-	claims := jwts.GetClaims(c)
-
+	var userPatch, confPatch string
 	if len(userMap) > 0 {
-		var userModel models.UserModel
-		err = global.DB.Preload("UserConfModel").Take(&userModel, claims.UserID).Error
-		if err != nil {
-			response.FailWithMsg("用户不存在", c)
-			return
-		}
-		// //TODO:修改用户名的逻辑,以后移植到专门的路由
-		// if cr.username != nil {
-		// 	var userCount int64
-		// 	global.DB.Debug().Model(models.UserModel{}).
-		// 		Where("username = ? and id <> ?", *cr.Username, claims.UserID).
-		// 		Count(&userCount)
-		// 	fmt.Println(*cr.Username, userCount)
-		// 	if userCount > 0 {
-		// 		res.FailWithMsg("该用户名被使用", c)
-		// 		return
-		// 	}
-		// 	if *cr.Username != userModel.Username {
-		// 		// 如果和我的用户名是一样的
-		// 		var uud = userModel.UserConfModel.UpdateUsernameDate
-		// 		if uud != nil {
-		// 			if time.Now().Sub(*uud).Hours() < 720 {
-		// 				res.FailWithMsg("用户名30天内只能修改一次", c)
-		// 				return
-		// 			}
-		// 		}
-		// 		userConfMap["update_username_date"] = time.Now()
-		// 	}
-		// }
-
-		if req.NickName != nil || req.Avatar != nil {
-		}
-
-		err = global.DB.Model(&userModel).Updates(userMap).Error
+		b, err := json.Marshal(userMap)
 		if err != nil {
 			response.FailWithMsg("用户信息修改失败", c)
 			return
 		}
+		userPatch = string(b)
 	}
 	if len(userConfMap) > 0 {
-		var userConfModel models.UserConfModel
-		err = global.DB.Take(&userConfModel, "user_id = ?", claims.UserID).Error
+		b, err := json.Marshal(userConfMap)
 		if err != nil {
-			response.FailWithMsg("用户配置信息不存在", c)
+			response.FailWithMsg("用户信息修改失败", c)
 			return
 		}
-		err = global.DB.Model(&userConfModel).Updates(userConfMap).Error
-		if err != nil {
+		confPatch = string(b)
+	}
+
+	claims := jwts.GetClaims(c)
+	if userPatch != "" || confPatch != "" {
+		if err := user_service.UpdateUser(claims.UserID, userPatch, confPatch); err != nil {
 			response.FailWithMsg("用户信息修改失败", c)
 			return
 		}

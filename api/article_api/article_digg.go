@@ -2,11 +2,12 @@ package article_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
+	"StarDreamerCyberNook/service/content_service"
 	"StarDreamerCyberNook/service/message_service"
 	"StarDreamerCyberNook/service/redis_service/redis_count"
 	jwts "StarDreamerCyberNook/utils/jwts"
+	"errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -19,44 +20,31 @@ func (ArticleApi) ArticleDiggView(c *gin.Context) {
 		return
 	}
 
-	var article models.ArticleModel
-	err := global.DB.Take(&article, "status = ? and id = ?", models.StatusPublished, IDRequest.ID).Error
-	if err != nil {
-		response.FailWithMsg("文章不存在", c)
-		return
-	}
-
 	claims := jwts.GetClaims(c)
 
-	// 查一下之前有没有点过
-	var userDiggArticle models.ArticleDiggModel
-	err = global.DB.Take(&userDiggArticle, "user_id = ? and article_id = ?", claims.UserID, article.ID).Error
+	// 点赞/取消点赞的落库下沉到 content 服务;缓存计数与消息留在网关
+	digged, changed, err := content_service.ToggleArticleDigg(claims.UserID, IDRequest.ID)
 	if err != nil {
-		// 点赞
-		digg := models.ArticleDiggModel{
-			UserID:    claims.UserID,
-			ArticleID: IDRequest.ID,
-		}
-		if err = global.DB.Create(&digg).Error; err != nil {
-			response.FailWithMsg("点赞失败", c)
+		if errors.Is(err, content_service.ErrNotFound) {
+			response.FailWithMsg("文章不存在", c)
 			return
 		}
-		redis_count.SetCacheDigg(IDRequest.ID, true)
+		response.FailWithMsg("操作失败", c)
+		return
+	}
+	if changed {
+		redis_count.SetCacheDigg(IDRequest.ID, digged)
+	}
+	if digged {
 		response.OkWithMsg("点赞成功", c)
 		// 发送点赞消息,失败只记录日志,不影响主流程
-		if err = message_service.InsertArticleDiggMessage(digg); err != nil {
+		if err = message_service.InsertArticleDiggMessage(models.ArticleDiggModel{
+			UserID:    claims.UserID,
+			ArticleID: IDRequest.ID,
+		}); err != nil {
 			logrus.Errorf("发送点赞消息失败: %v", err)
 		}
 		return
-	}
-	// 取消点赞:按主键删除并确认删除成功后再回退计数,避免删失败时计数仍然-1
-	tx := global.DB.Delete(&userDiggArticle)
-	if tx.Error != nil {
-		response.FailWithMsg("取消点赞失败", c)
-		return
-	}
-	if tx.RowsAffected > 0 {
-		redis_count.SetCacheDigg(IDRequest.ID, false)
 	}
 	response.OkWithMsg("取消点赞成功", c)
 }

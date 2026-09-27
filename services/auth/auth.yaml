@@ -1,0 +1,10 @@
+# auth 服务配置(文件为主;环境变量 JWT_* 可选覆盖)
+# 注意:密钥需与博客 setting.yaml 的 jwt 保持一致(博客用同一密钥做本地校验)。
+listen: 0.0.0.0:9250
+
+jwt:
+  accessTokenSecret: ""     # 建议经环境变量 JWT_ACCESS_SECRET 注入
+  refreshTokenSecret: ""    # 建议经环境变量 JWT_REFRESH_SECRET 注入
+  accessExpireMinutes: 60   # 访问令牌有效期(分钟)
+  refreshExpireHours: 168   # 刷新令牌有效期(小时)
+  issuer: "stardreamer"

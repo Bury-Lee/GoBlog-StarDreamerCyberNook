@@ -2,9 +2,9 @@ package user_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
 	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/user_service"
 	jwts "StarDreamerCyberNook/utils/jwts"
 	"time"
 
@@ -31,33 +31,31 @@ type UserDetailResponse struct { //个人主页的返回
 
 func (UserApi) UserDetailView(c *gin.Context) {
 	claims := jwts.GetClaims(c)
-	print(claims) //debug
 	if claims == nil {
 		response.FailWithMsg("未登录", c)
 		return
 	}
-	var user models.UserModel
-	if err := global.DB.Preload("UserConfModel").Take(&user, claims.UserID).Error; err != nil {
+	user, err := user_service.GetUserDetail(claims.UserID)
+	if err != nil {
 		response.FailWithMsg("用户不存在", c)
 		return
 	}
 
 	var result = UserDetailResponse{
-		Model:       user.Model,
+		Model:       models.Model{ID: user.ID, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt},
 		UserName:    user.UserName,
 		NickName:    user.NickName,
 		Avatar:      user.Avatar,
 		Abstract:    user.Abstract,
 		Age:         user.Age,
+		LikeTags:    user.LikeTags,
 		ContactInfo: user.ContactInfo,
 		Role:        user.Role,
-	}
 
-	if user.UserConfModel != nil {
-		result.UpdateUsernameDate = user.UserConfModel.UpdateUsernameDate
-		result.OpenFollow = user.UserConfModel.OpenFollow
-		result.OpenFans = user.UserConfModel.OpenFans
-		result.HomeStyleID = user.UserConfModel.HomeStyleID
+		UpdateUsernameDate: user.UpdateUsernameDate,
+		OpenFollow:         user.OpenFollow,
+		OpenFans:           user.OpenFans,
+		HomeStyleID:        user.HomeStyleID,
 	}
 	response.OkWithData(result, c)
 }

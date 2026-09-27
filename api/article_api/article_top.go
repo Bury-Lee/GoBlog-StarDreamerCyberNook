@@ -2,10 +2,10 @@ package article_api
 
 import (
 	"StarDreamerCyberNook/common/response"
-	"StarDreamerCyberNook/global"
-	"StarDreamerCyberNook/models"
 	"StarDreamerCyberNook/models/enum"
+	"StarDreamerCyberNook/service/content_service"
 	"StarDreamerCyberNook/utils/jwts"
+	"errors"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -28,26 +28,16 @@ func (ArticleApi) ArticleTopView(c *gin.Context) {
 		response.FailWithMsg("token解析失败", c)
 		return
 	}
-	//查询是否已经有这篇文章的置顶
-	if global.DB.Where("user_id = ? AND article_id = ?", claim.UserID, req.ArticleID).First(&models.UserTopArticleModel{}).Error == nil {
-		response.FailWithMsg("这篇文章已经被你置顶了", c)
-		return
-	}
-	if claim.Role != enum.AdminRole {
-		var count int64
-		global.DB.Model(&models.UserTopArticleModel{}).Where("user_id = ?", claim.UserID).Count(&count)
-		if count > maxTopLimit {
-			response.FailWithMsg(fmt.Sprintf("你已经有%d篇文章被置顶了,不能再多了", maxTopLimit), c)
-			return
-		}
-	}
-	topModel := models.UserTopArticleModel{
-		UserID:    claim.UserID,
-		ArticleID: req.ArticleID,
-	}
 
-	if global.DB.Create(&topModel).Error != nil {
-		response.FailWithMsg("置顶失败", c)
+	if err := content_service.TopArticle(claim.UserID, req.ArticleID, claim.Role == enum.AdminRole, int(maxTopLimit)); err != nil {
+		switch {
+		case errors.Is(err, content_service.ErrAlreadyTop):
+			response.FailWithMsg("这篇文章已经被你置顶了", c)
+		case errors.Is(err, content_service.ErrTopLimit):
+			response.FailWithMsg(fmt.Sprintf("你已经有%d篇文章被置顶了,不能再多了", maxTopLimit), c)
+		default:
+			response.FailWithMsg("置顶失败", c)
+		}
 		return
 	}
 	response.OkWithMsg("置顶成功", c)
@@ -65,7 +55,7 @@ func (ArticleApi) ArticleCancleTopView(c *gin.Context) {
 		response.FailWithMsg("token解析失败", c)
 		return
 	}
-	if err := global.DB.Where("user_id = ? AND article_id = ?", claim.UserID, req.ArticleID).Delete(&models.UserTopArticleModel{}).Error; err != nil {
+	if err := content_service.CancelArticleTop(claim.UserID, req.ArticleID); err != nil {
 		response.FailWithMsg("没有找到相关的置顶记录", c)
 		return
 	}
@@ -91,13 +81,7 @@ func (ArticleApi) AdminArticleDeleteView(c *gin.Context) {
 		return
 	}
 
-	tx := global.DB.Where("user_id = ? AND article_id = ?", req.UserID, req.ArticleID).
-		Delete(&models.UserTopArticleModel{})
-	if tx.Error != nil {
-		response.FailWithMsg("取消置顶失败", c)
-		return
-	}
-	if tx.RowsAffected == 0 {
+	if err := content_service.AdminCancelArticleTop(req.UserID, req.ArticleID); err != nil {
 		response.FailWithMsg("没有相关记录", c)
 		return
 	}

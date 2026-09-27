@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package common.v1;
+
+option go_package = "StarDreamerCyberNook/gen/common/v1;commonv1";
+
+// CallMeta 是跨服务调用的元数据,沿调用链透传。
+// 既可显式置于消息中,也可经 gRPC metadata 传递(键建议: x-call-meta)。
+message CallMeta {
+  string trace_id         = 1;
+  string span_id          = 2;
+  string parent_span_id   = 3;
+  int64  deadline_unix_ms = 4; // 端到端截止时间,沿链递减传播
+  int32  depth            = 5; // 调用深度,超限拒绝(防环)
+  string idempotency_key  = 6; // 幂等键,支持安全重试
+  string principal        = 7; // 调用方身份(用户 / 服务)
+}
+
+// Error 是稳定错误模型:code 供程序判别,message 供人阅读。
+message Error {
+  string code      = 1; // 稳定错误码:NOT_FOUND / UNAVAILABLE / DEGRADED / ...
+  string message   = 2;
+  bool   retryable = 3; // 是否可安全重试(幂等时)
+}
