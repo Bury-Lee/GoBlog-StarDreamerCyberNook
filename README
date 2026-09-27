@@ -56,6 +56,50 @@ go-blog
 └─ main.go              # Entry point
 ```
 
+## 🧭 Deployment Topologies (One Codebase, Three Forms)
+
+The componentized design lets **one codebase and one `setting.yaml`** be assembled into three deployment topologies, from light to heavy, and **evolve between them without rewriting** business code. They differ **only in deployment and configuration**, not in code.
+
+| # | Form | Scaling unit | Best for | Key config | External dependencies |
+|---|------|--------------|----------|------------|-----------------------|
+| ① | **Monolith (single instance)** | One full-featured instance | Individuals, small VPS, local dev | `host.enable: true`, `components` all on by default | A single DB (SQLite works) + local storage |
+| ② | **Instance-level scaling (replicas + load balancing)** | One full-featured instance, replicated N times | A single node nearing its limits; smooth scale-out | Form ① + object storage + a load balancer over instances | Shared DB / Redis / ES / object storage |
+| ③ | **Component-level scaling (split or combined)** | Granularity of your choice: whole-instance replicas, or each component deployed separately | Existing K8s / container orchestration; need per-component elasticity | `services/*/cmd` standalone entries, `dbStandalone` as needed | K8s orchestration & service discovery |
+
+> Evolution path: ① monolith → ② instance-level scaling → ③ component-level scaling — **split and scale incrementally, no business-code rewrite**.
+
+### ① Monolith (single instance)
+
+One process runs the blog gateway plus all components (the default unified host).
+
+- **Scaling unit**: a single instance; scale vertically.
+- **Config**: `host.enable: true` (default); omit `components` to enable all; `services` point at `127.0.0.1`.
+- **Dependencies**: minimal — a single DB (SQLite is fine), ES optional (DB-fallback search), local uploads allowed.
+- **Best for**: personal blogs, local development, single-machine setups.
+
+### ② Instance-level scaling (replicas + load balancing)
+
+The same binary/image is replicated N times, each a **full-featured instance**, behind something like `NGINX`; elasticity comes from **adding instances**, not from K8s.
+
+- **Scaling unit**: one complete instance.
+- **Stateless prerequisites**: keep all state in `MySQL / Redis / Elasticsearch`; put uploads in **object storage** (not the local `images/` directory); use JWT so no sticky sessions are needed.
+- **Scheduled tasks**: a Redis distributed lock (`cron_lock`) ensures only one instance actually runs each task, so replicas never duplicate work.
+- **Config**: same as form ① plus `objectStorage`; `services` still point at `127.0.0.1` (each instance calls its own internal components).
+- **Best for**: smooth scale-out from one box to several, and rolling releases per node. See *NGINX Horizontal Scaling* below for details.
+
+### ③ Component-level scaling (split or combined)
+
+On K8s, **the same component model** lets you pick the deployment granularity:
+
+- **Whole-instance replicas**: one Deployment running full-featured instances with multiple replicas, using K8s instead of form ②'s `NGINX` + manual scaling;
+- **One Deployment per component (true microservices)**: use each `services/*/cmd` standalone entry to deploy the components that need **independent scaling or release**, with `dbStandalone` for their own DB as needed, letting K8s Services handle discovery and load balancing.
+
+In other words, **"monolith" and "microservices" are not two codebases** — they are two granularities of the same component contract, and you can even **mix** them in one cluster (scale hot components out, keep the rest co-located).
+
+- **Best for**: existing K8s clusters that need per-component elasticity or independent releases.
+
+> All three share the same component contract and the same configuration source, so you can **migrate smoothly from any form to another** without rewriting business code.
+
 ## 🖥️ Built-in Frontend (Vue 3 + TypeScript)
 
 A complete frontend lives in [`frontend/`](frontend/), covering the public site and the admin console. It talks to the same `/api` endpoints and reuses the `token` / `refreshToken` authentication flow.
@@ -466,7 +510,9 @@ The project supports database read-write separation, but **does not provide data
 - Data consistency between the write database and the read databases must be guaranteed by your own operations outside the project (for example, native MySQL replication)
 - If you need to synchronize data to another store (such as Elasticsearch), implement it yourself outside this repository
 
-## 🌐 NGINX Horizontal Scaling (Optional)
+## 🌐 NGINX Horizontal Scaling (Form ② in practice, optional)
+
+> This section details deployment form ② above; see the *Deployment Topologies* section for the overview.
 
 After recent architecture adjustments, the service layer is now effectively stateless, and business data is centralized in `MySQL / Redis / Elasticsearch`.  
 Based on this design, you can use `NGINX` reverse proxy and load balancing to scale out horizontally.
