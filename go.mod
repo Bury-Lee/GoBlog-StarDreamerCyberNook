@@ -2,10 +2,10 @@ module StarDreamerCyberNook
 
 go 1.26.6
 
-// GoTenon:进程内插件内核(本地开发 replace;发布前迁移到规范远程路径)
+// GoTenon:进程内插件内核(远程插件库)
 require GoTenon v0.0.0
 
-replace GoTenon => ../GoTenon
+replace GoTenon => github.com/Bury-Lee/GoTenon v0.0.0-20260928021046-a3c3f0de3e4d
 
 require (
 	github.com/PuerkitoBio/goquery v1.12.0
@@ -27,6 +27,8 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/crypto v0.57.0
+	google.golang.org/grpc v1.83.2
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
@@ -97,8 +99,6 @@ require (
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect

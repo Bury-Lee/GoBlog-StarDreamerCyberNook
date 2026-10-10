@@ -18,5 +18,4 @@ type AI struct { //AI模型配置
 	ApiKey   string `yaml:"ApiKey" json:"-"`          // AI模型密钥
 	NickName string `yaml:"nickName" json:"nickName"` // AI模型昵称
 	Avatar   string `yaml:"avatar" json:"avatar"`     // AI模型头像URL
-	Platform string `yaml:"platform" json:"platform"` // AI模型平台TODO:后期适配
 }
